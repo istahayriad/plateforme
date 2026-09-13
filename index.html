@@ -297,19 +297,20 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
   <!-- ACCUEIL -->
   <section id="vueAccueil">
     <div class="choix">
-      <button class="porte" id="porteForm">
-        <span class="pict">FR</span>
-        <h2>Je suis formateur</h2>
-        <p>Matricule et mot de passe pour consulter votre emploi et celui de vos groupes.</p>
-      </button>
+      <!-- Ordre voulu : stagiaires, formateurs, gestionnaires. -->
       <button class="porte stag" id="porteStag">
         <span class="pict">ST</span>
-        <h2>Je suis stagiaire</h2>
+        <h2>Espace stagiaire</h2>
         <p>Votre nom, votre prénom et votre mot de passe : votre groupe est reconnu automatiquement.</p>
+      </button>
+      <button class="porte" id="porteForm">
+        <span class="pict">FR</span>
+        <h2>Espace formateur</h2>
+        <p>Matricule et mot de passe pour consulter votre emploi et celui de vos groupes.</p>
       </button>
       <button class="porte gest" id="porteGest">
         <span class="pict">GS</span>
-        <h2>Je suis gestionnaire de stagiaires</h2>
+        <h2>Espace gestionnaire de stagiaires</h2>
         <p>Dépôt du fichier des absences et suivi des conseils de classe.</p>
       </button>
     </div>
