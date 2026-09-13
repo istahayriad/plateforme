@@ -1041,19 +1041,27 @@ async function rattrapagesRecus(){
       <div class="bloc"><b>${toutes.length}</b><span>demandes</span></div>
       <div class="bloc"><b>${attente}</b><span>en attente</span></div>
     </div>
-    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>À rattraper</th><th>Rattrapé le</th><th>Motif</th><th>Réponse</th></tr>
-    ${toutes.map(x=>`<tr${x.etat!=='En attente'?' class="passe"':''}>
-      <td class="jour">${jjmm(x.date)}</td>
-      <td class="mod">${x.nom||'—'}<span class="det">${x.matricule||x.ref}</span></td>
-      <td>${resume(x.manques||x.absences)}</td><td>${resume(x.rattrapages)}</td>
-      <td>${x.motif||'—'}</td>
-      <td>${x.etat==='En attente'
-          ? `<input class="ratrep" data-ref="${x.ref}" data-rang="${x.rang}" placeholder="un mot (facultatif)" style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--ligne);margin-bottom:6px">
-             <button class="action" style="padding:5px 10px;font-size:12px" data-rat="Acceptée" data-ref="${x.ref}" data-rang="${x.rang}">Accepter</button>
-             <button class="action fantome" style="padding:5px 10px;font-size:12px" data-rat="Refusée" data-ref="${x.ref}" data-rang="${x.rang}">Refuser</button>`
-          : `<span class="pastille ${x.etat==='Acceptée'?'fait':'conseil'}">${x.etat}</span>${x.reponse?'<br><span class="det">'+x.reponse+'</span>':''}`}</td>
-    </tr>`).join('')}
-    </table>`;
+    ${toutes.map(x=>`
+    <div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-top:12px;background:var(--papier);${x.etat!=='En attente'?'opacity:.75':''}">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline">
+        <b style="font-family:'Archivo',sans-serif;font-size:14px">${x.nom||'—'} <span class="det">· ${x.matricule||x.ref}</span></b>
+        <span class="det">demande du ${jjmm(x.date)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:10px">
+        <div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--encre-doux);margin-bottom:4px">Séances à rattraper</div>
+          ${(x.manques||x.absences||[]).map(a=>`<div><b>${dateLongue(a.jour)}</b><br><span class="det">${a.creneaux.map(i=>CRENEAUX_PF[i]).join(' · ')}</span></div>`).join('')||'—'}</div>
+        <div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--encre-doux);margin-bottom:4px">Rattrapage proposé</div>
+          ${(x.rattrapages||[]).map(a=>`<div><b>${dateLongue(a.jour)}</b><br><span class="det">${a.creneaux.map(i=>CRENEAUX_PF[i]).join(' · ')}</span></div>`).join('')||'—'}</div>
+      </div>
+      ${x.motif?`<div style="margin-top:8px"><span class="det">Motif :</span> ${x.motif}</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">
+        ${x.etat==='En attente'
+          ? `<input class="ratrep" data-ref="${x.ref}" data-rang="${x.rang}" placeholder="un mot pour le formateur (facultatif)" style="flex:1 1 240px;font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne)">
+             <button class="action" style="padding:8px 16px" data-rat="Acceptée" data-ref="${x.ref}" data-rang="${x.rang}">Accepter</button>
+             <button class="action fantome" style="padding:8px 16px" data-rat="Refusée" data-ref="${x.ref}" data-rang="${x.rang}">Refuser</button>`
+          : `<span class="pastille ${x.etat==='Acceptée'?'fait':'conseil'}">${x.etat}</span>${x.reponse?'<span class="det">'+x.reponse+'</span>':''}`}
+      </div>
+    </div>`).join('')}`;
   box.querySelectorAll('[data-rat]').forEach(b=>{
     b.onclick=async()=>{
       const cle='rat/'+b.dataset.ref, i=+b.dataset.rang;
@@ -1359,9 +1367,20 @@ async function afficherRattrapage(){
       <div class="rangee"><button class="action" id="okRat" ${db?'':'disabled'}>Envoyer la demande</button></div>
       <div class="etat" id="etatRat"></div>
       <h2 style="margin-top:22px">Mes demandes de rattrapage</h2>
-      ${liste.length ? `<table class="efm"><tr><th>Date</th><th>À rattraper</th><th>Rattrapé le</th><th>Motif</th><th>Réponse</th></tr>
-        ${liste.map(x=>`<tr><td class="jour">${jjmm(x.date)}</td><td>${resume(x.manques||x.absences)}</td><td>${resume(x.rattrapages)}</td><td>${x.motif||'—'}</td>
-          <td>${etatHtml(x)}${x.reponse?'<br><span class="det">'+x.reponse+'</span>':''}</td></tr>`).join('')}</table>`
+      ${liste.length ? liste.map(x=>`
+        <div style="border:1px solid var(--ligne);border-radius:12px;padding:12px 14px;margin-top:10px;background:var(--papier)">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center">
+            <span class="det">demande du ${jjmm(x.date)}</span>${etatHtml(x)}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:8px">
+            <div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--encre-doux)">Séances à rattraper</div>
+              ${(x.manques||x.absences||[]).map(a=>`<div><b>${dateLongue(a.jour)}</b><br><span class="det">${a.creneaux.map(i=>CRENEAUX_PF[i]).join(' · ')}</span></div>`).join('')||'—'}</div>
+            <div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--encre-doux)">Rattrapage proposé</div>
+              ${(x.rattrapages||[]).map(a=>`<div><b>${dateLongue(a.jour)}</b><br><span class="det">${a.creneaux.map(i=>CRENEAUX_PF[i]).join(' · ')}</span></div>`).join('')||'—'}</div>
+          </div>
+          ${x.motif?`<div style="margin-top:6px"><span class="det">Motif :</span> ${x.motif}</div>`:''}
+          ${x.reponse?`<div style="margin-top:6px"><span class="det">Réponse de la direction :</span> ${x.reponse}</div>`:''}
+        </div>`).join('')
         : '<div class="vide-msg">Aucune demande pour le moment.</div>'}
     </div>`;
   const brancher=()=>$('demContenu').querySelectorAll('.ratx').forEach(b=>b.onclick=()=>{
