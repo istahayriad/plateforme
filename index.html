@@ -1826,6 +1826,20 @@ D=DEMO; remplirGroupes(); majPied(); vue('Accueil');
   const demoPerimee = d && d.demo && DEMO.demo && String(d.maj||'') < String(DEMO.maj||'');
   if(d && !demoPerimee){ D=d; remplirGroupes(); majPied(); }
   else if(demoPerimee){ try{ localStorage.removeItem(CLE); }catch(e){} }
+  resumerPublie();
 })();
+/* Dans l'espace administrateur, chaque carte rappelle CE QUI EST PUBLIÉ sur le
+   serveur : après un rechargement les champs de fichier sont vides (c'est le
+   navigateur), mais les données, elles, sont bien là. Sans ce rappel on
+   croyait tout perdu et on redéposait les trois fichiers. */
+function resumerPublie(){
+  if(!D || D.demo) return;
+  const set=(id,txt)=>{ const e=$(id); if(e && !e.textContent){ e.className='etat ok'; e.textContent='Publié : '+txt; } };
+  const ns=(D.semaines||[]).length, nse=(D.semaines||[]).reduce((a,s)=>a+s.length,0);
+  set('etatEmplois', ns+' semaine'+(ns>1?'s':'')+' · '+nse+' séances · '+(D.F||[]).length+' formateurs · '+(D.G||[]).length+' groupes');
+  set('etatListes', (D.formateurs||[]).length+' formateurs · '+(D.stagiaires||[]).length+' stagiaires · '+(D.gestionnaires||[]).length+' gestionnaires');
+  set('etatEfm', (D.efm||[]).length+' examen'+((D.efm||[]).length>1?'s':''));
+  set('etatAbs', (D.abs||[]).length+' stagiaires · '+(D.absSem||[]).length+' semaines');
+}
 </script>
 </body></html>
