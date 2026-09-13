@@ -897,7 +897,13 @@ function efmDuProfil(){
   const tout=(D.efm||[]);
   if(profil.type==='S') return tout.filter(e=>norm(e[0])===norm(profil.groupe));
   const gs=groupesDuFormateur(profil.iF).map(i=>norm(D.G[i][0]));
-  return tout.filter(e=>gs.includes(norm(e[0])) || norm(e[5])===norm(profil.libelle));
+  /* le classeur EFM écrit le nom comme la base AP (« FATIMA MOUHTAT »), la
+     liste des formateurs l'écrit « MOUHTAT FATIMA » : on compare les mots,
+     dans n'importe quel ordre */
+  const mots=s=>(s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()
+                 .split(/[^A-Z0-9]+/).filter(Boolean).sort().join(' ');
+  const moi=[profil.libelle, (D.F||[])[profil.iF]||''].map(mots);
+  return tout.filter(e=>gs.includes(norm(e[0])) || moi.includes(mots(e[5])));
 }
 /* la mention « faites glisser » n'apparaît que si le tableau déborde vraiment */
 function majGlisser(zone){
