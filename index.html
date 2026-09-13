@@ -537,6 +537,11 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
           </div>
           <div id="zoneDemRecues"></div>
         </fieldset>
+        <fieldset style="margin-top:14px">
+          <legend>Demandes de rattrapage</legend>
+          <p class="note">Jours et créneaux de rattrapage demandés par les formateurs : acceptez ou refusez, le formateur voit votre réponse.</p>
+          <div id="zoneRatRecues"></div>
+        </fieldset>
       </div>
 
       <div class="sous-admin" data-page="outils" hidden>
@@ -1017,7 +1022,51 @@ async function dessinerPdf(dataUrl, boite){
     boite.innerHTML='Impossible d\'afficher ce PDF ('+(err.message||err)+'). Demandez au formateur une photographie du bulletin.';
   }
 }
+/* Demandes de rattrapage reçues : accepter / refuser, avec un mot pour le formateur. */
+async function rattrapagesRecus(){
+  const box=$('zoneRatRecues'); if(!box) return;
+  if(!db){ box.innerHTML='<div class="vide-msg">Stockage serveur indisponible.</div>'; return; }
+  box.innerHTML='<p class="etat">Lecture…</p>';
+  let docs=[];
+  try{ const s=await db.collection('rat').get(); docs=s.docs||[]; }
+  catch(e){ box.innerHTML='<div class="vide-msg">Lecture impossible : '+(e.message||e)+'</div>'; return; }
+  const toutes=[];
+  docs.forEach(d=>{ const o=d.data||{}; (o.liste||[]).forEach((x,i)=>toutes.push({...x, ref:d.id, rang:i})); });
+  toutes.sort((a,b)=>(a.etat==='En attente'?0:1)-(b.etat==='En attente'?0:1) || String(b.date||'').localeCompare(String(a.date||'')));
+  if(!toutes.length){ box.innerHTML='<div class="vide-msg">Aucune demande de rattrapage.</div>'; return; }
+  const resume=l=>(l||[]).map(a=>'<div>'+dateLongue(a.jour)+' <span class="det">'+a.creneaux.map(i=>CRENEAUX_PF[i]).join(', ')+'</span></div>').join('');
+  const attente=toutes.filter(x=>x.etat==='En attente').length;
+  box.innerHTML=`
+    <div class="resume" style="margin-top:12px">
+      <div class="bloc"><b>${toutes.length}</b><span>demandes</span></div>
+      <div class="bloc"><b>${attente}</b><span>en attente</span></div>
+    </div>
+    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>Rattrapage demandé</th><th>Motif</th><th>Réponse</th></tr>
+    ${toutes.map(x=>`<tr${x.etat!=='En attente'?' class="passe"':''}>
+      <td class="jour">${jjmm(x.date)}</td>
+      <td class="mod">${x.nom||'—'}<span class="det">${x.matricule||x.ref}</span></td>
+      <td>${resume(x.rattrapages)}</td>
+      <td>${x.motif||'—'}</td>
+      <td>${x.etat==='En attente'
+          ? `<input class="ratrep" data-ref="${x.ref}" data-rang="${x.rang}" placeholder="un mot (facultatif)" style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--ligne);margin-bottom:6px">
+             <button class="action" style="padding:5px 10px;font-size:12px" data-rat="Acceptée" data-ref="${x.ref}" data-rang="${x.rang}">Accepter</button>
+             <button class="action fantome" style="padding:5px 10px;font-size:12px" data-rat="Refusée" data-ref="${x.ref}" data-rang="${x.rang}">Refuser</button>`
+          : `<span class="pastille ${x.etat==='Acceptée'?'fait':'conseil'}">${x.etat}</span>${x.reponse?'<br><span class="det">'+x.reponse+'</span>':''}`}</td>
+    </tr>`).join('')}
+    </table>`;
+  box.querySelectorAll('[data-rat]').forEach(b=>{
+    b.onclick=async()=>{
+      const cle='rat/'+b.dataset.ref, i=+b.dataset.rang;
+      const inp=box.querySelector(`.ratrep[data-ref="${b.dataset.ref}"][data-rang="${i}"]`);
+      const d=await db.doc(cle).get(); const o=d.data||{}; const l=(o.liste||[]).slice();
+      if(l[i]){ l[i]={...l[i], etat:b.dataset.rat, reponse:(inp&&inp.value||'').trim(), repondu:new Date().toISOString()};
+                await db.doc(cle).set({...o, liste:l}); }
+      rattrapagesRecus();
+    };
+  });
+}
 async function demandesRecues(){
+  rattrapagesRecus();
   const box=$('zoneDemRecues');
   if(!db){
     box.innerHTML='<div class="vide-msg">Stockage serveur indisponible : les demandes des formateurs '
@@ -1249,6 +1298,87 @@ async function ecrireDemandes(mat, o){
   l.forEach((x,i)=>{ if(i<l.length-4 && x.contenu) delete x.contenu; });
   try{ await db.doc('dem/'+mat).set(o); return true; }catch(e){ return false; }
 }
+/* ------------------------- demande de rattrapage -------------------------
+   Le formateur indique le ou les jours (et créneaux) où il s'absentera, et le
+   ou les jours (et créneaux) où il rattrapera. La direction accepte ou refuse
+   dans son espace ; la réponse apparaît ici. Document « rat/<matricule> ». */
+let SOUS_DEM='att';
+const CRENEAUX_PF=['08h30 – 11h00','11h00 – 13h30','13h30 – 16h00','16h00 – 18h30'];
+const JOURS_LONGS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const MOIS_LONGS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function dateLongue(iso){ const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso;
+  return JOURS_LONGS[d.getDay()]+' '+d.getDate()+' '+MOIS_LONGS[d.getMonth()]+' '+d.getFullYear(); }
+/* les 42 semaines × 6 jours à partir du lundi de S1 */
+function joursAnnee(){
+  const deb=new Date((D.debut||'2026-09-07')+'T00:00:00'); const out=[];
+  for(let w=0; w<42; w++) for(let j=0; j<6; j++){
+    const d=new Date(deb); d.setDate(deb.getDate()+w*7+j);
+    const iso=d.toISOString().slice(0,10);
+    out.push({iso, lib:'S'+(w+1)+' · '+dateLongue(iso)});
+  }
+  return out;
+}
+async function lireRattrapages(mat){
+  if(!db) return {liste:[]};
+  try{ const d=await db.doc('rat/'+mat).get(); return d.exists ? (d.data||{liste:[]}) : {liste:[]}; }catch(e){ return {liste:[]}; }
+}
+async function ecrireRattrapages(mat, o){
+  if(!db) return false;
+  try{ await db.doc('rat/'+mat).set(o); return true; }catch(e){ console.error(e); return false; }
+}
+async function afficherRattrapage(){
+  const mat=profil.matricule||'';
+  const dossier=await lireRattrapages(mat);
+  const liste=(dossier.liste||[]).slice().reverse();
+  const jours=joursAnnee();
+  const optJours=jours.map(j=>`<option value="${j.iso}">${j.lib}</option>`).join('');
+  const ligne=(kind)=>`<div class="rangee ratl" data-kind="${kind}" style="align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px">
+      <select class="ratj" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre);min-width:260px">${optJours}</select>
+      ${CRENEAUX_PF.map((c,i)=>`<label style="font-size:12px;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" class="ratc" value="${i}"> ${c}</label>`).join('')}
+      <button class="action fantome ratx" style="padding:4px 10px;font-size:12px">retirer</button></div>`;
+  const etatHtml=x=>x.etat==='Acceptée' ? '<span class="pastille fait">Acceptée</span>'
+                   : x.etat==='Refusée' ? '<span class="pastille conseil">Refusée</span>'
+                   : '<span class="pastille">En attente</span>';
+  const resume=l=>l.map(a=>dateLongue(a.jour)+' ('+a.creneaux.map(i=>CRENEAUX_PF[i]).join(', ')+')').join(' ; ');
+  $('demContenu').innerHTML=`
+    <div class="panneau" style="max-width:none">
+      <h2>Demande de rattrapage</h2>
+      <p class="sous">Choisissez le ou les jours de rattrapage, avec les créneaux. La direction accepte ou refuse ;
+         sa réponse s'affiche ci-dessous.</p>
+      <div class="erreur" id="errRat" hidden></div>
+      ${db?'':'<div class="vide-msg">Stockage serveur indisponible : la demande ne peut pas être envoyée.</div>'}
+      <h3 style="font-family:'Archivo',sans-serif;font-size:14px;margin:14px 0 4px">Jours et créneaux de rattrapage</h3>
+      <div id="ratRat">${ligne('rat')}</div>
+      <button class="action fantome" id="ratRatPlus" style="margin-top:6px;padding:6px 12px;font-size:12px">+ un autre jour de rattrapage</button>
+      <div class="champ" style="margin-top:14px"><label for="ratMotif">Motif (facultatif)</label>
+        <input id="ratMotif" placeholder="ex. formation, rendez-vous médical…"></div>
+      <div class="rangee"><button class="action" id="okRat" ${db?'':'disabled'}>Envoyer la demande</button></div>
+      <div class="etat" id="etatRat"></div>
+      <h2 style="margin-top:22px">Mes demandes de rattrapage</h2>
+      ${liste.length ? `<table class="efm"><tr><th>Date</th><th>Rattrapage</th><th>Motif</th><th>Réponse</th></tr>
+        ${liste.map(x=>`<tr><td class="jour">${jjmm(x.date)}</td><td>${resume(x.rattrapages)}</td><td>${x.motif||'—'}</td>
+          <td>${etatHtml(x)}${x.reponse?'<br><span class="det">'+x.reponse+'</span>':''}</td></tr>`).join('')}</table>`
+        : '<div class="vide-msg">Aucune demande pour le moment.</div>'}
+    </div>`;
+  const brancher=()=>$('demContenu').querySelectorAll('.ratx').forEach(b=>b.onclick=()=>{
+    const bloc=b.closest('.ratl'), parent=bloc.parentElement;
+    if(parent.querySelectorAll('.ratl').length>1) bloc.remove(); });
+  brancher();
+  $('ratRatPlus').onclick=()=>{ $('ratRat').insertAdjacentHTML('beforeend', ligne('rat')); brancher(); };
+  const lire=id=>[...$(id).querySelectorAll('.ratl')].map(l=>({jour:l.querySelector('.ratj').value,
+      creneaux:[...l.querySelectorAll('.ratc:checked')].map(c=>+c.value)})).filter(x=>x.creneaux.length);
+  $('okRat').onclick=async()=>{
+    const rattrapages=lire('ratRat');
+    if(!rattrapages.length) return erreur('errRat','Indiquez au moins un jour de rattrapage avec ses créneaux.');
+    erreur('errRat',null);
+    const e=$('etatRat'); e.className='etat'; e.textContent='Envoi…';
+    const o={liste:(dossier.liste||[]).concat([{date:new Date().toISOString(), nom:profil.libelle, matricule:mat,
+             rattrapages, motif:($('ratMotif').value||'').trim(), etat:'En attente', reponse:''}])};
+    const ok=await ecrireRattrapages(mat, o);
+    if(!ok){ e.className='etat ko'; e.textContent='L\'envoi a échoué.'; return; }
+    afficherRattrapage();
+  };
+}
 async function afficherDemandes(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
   $('mesGroupes').hidden=true; $('vueEfm').hidden=true; $('vueAbs').hidden=true;
@@ -1268,7 +1398,16 @@ async function afficherDemandes(){
   const enLigne=!!db;
   const dossier = enLigne ? (await lireDemandes(mat) || {liste:[], bulletins:[]}) : {liste:histo(), bulletins:[]};
   const liste=(dossier.liste||[]).slice().reverse();
+  /* Deux sous-pages : l'attestation (inchangée) et la demande de rattrapage. */
   $('vueDem').innerHTML=`
+    <div class="onglets noprint" id="ongDemSous">
+      <button data-sd="att" class="${SOUS_DEM==='att'?'on':''}">Demande d'attestation</button>
+      <button data-sd="rat" class="${SOUS_DEM==='rat'?'on':''}">Demande de rattrapage</button>
+    </div>
+    <div id="demContenu"></div>`;
+  $('vueDem').querySelectorAll('#ongDemSous button').forEach(b=>b.onclick=()=>{ SOUS_DEM=b.dataset.sd; afficherDemandes(); });
+  if(SOUS_DEM==='rat'){ await afficherRattrapage(); return; }
+  $('demContenu').innerHTML=`
     <div class="panneau" style="max-width:none">
       <h2>Demande d'attestation</h2>
       <p class="sous">${enLigne
