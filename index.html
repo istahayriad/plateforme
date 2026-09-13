@@ -613,10 +613,15 @@ async function ouvrirDb(){
     if(!window.firebase) throw new Error('SDK Firebase non chargé');
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     const fs=firebase.firestore(); fbAuth=firebase.auth();
-    const snap=s=>({exists:s.exists, id:s.id, data:s.exists?(s.data()||{}):null});
+    /* Firestore refuse les tableaux imbriqués (une séance = tableau dans un
+       tableau) et les valeurs indéfinies : chaque document est donc rangé
+       sous forme de texte JSON dans un seul champ « j », et relu de même. */
+    const lire=s=>{ if(!s.exists) return null; const o=s.data()||{};
+                    if(typeof o.j==='string'){ try{ return JSON.parse(o.j); }catch(e){ return {}; } } return o; };
+    const snap=s=>({exists:s.exists, id:s.id, data:lire(s)});
     db={
       doc:p=>({ get:async()=>snap(await fs.doc(p).get()),
-                set:o=>fs.doc(p).set(o),
+                set:o=>fs.doc(p).set({j:JSON.stringify(o), maj:new Date().toISOString()}),
                 delete:()=>fs.doc(p).delete() }),
       collection:c=>({ get:async()=>{ const r=await fs.collection(c).get(); return {docs:r.docs.map(snap)}; } })
     };
@@ -1629,7 +1634,7 @@ function initAdmin(){
            formateur à ses séances à la connexion, jamais l'index seul — un
            index calculé sur un ancien export désignait un autre formateur. */
         return [l[0], l[1], l[2], i, l[4]||'', i>=0 ? (base.F||[])[i] : ''];
-      }).filter(l=>l[3]>=0);
+      });   // les non reliés sont gardés : ils le seront à la connexion, une fois les emplois publiés
       if(perdus.length) $('etatPub').textContent='Non reliés à la base AP : '+perdus.slice(0,6).join(', ')+(perdus.length>6?'…':'');
     } else d.formateurs=anc.formateurs||[];
     /* Ce qui n'est pas redéposé est REPRIS de la publication en vigueur, jamais
@@ -1659,9 +1664,11 @@ function initAdmin(){
           +'Les formateurs pourront se connecter, les stagiaires non.');
       else erreur('errAdmin',null);
     }catch(err){
-      erreur('errAdmin', (err && (err.code==='permission-denied' || err.code==='invalid_argument'))
+      const txt=(err && (err.code==='permission-denied' || err.code==='invalid_argument'))
         ? "Publication refusée : seul le responsable du planning, connecté, peut publier les emplois et les listes."
-        : 'Publication impossible : '+(err && err.message || err));
+        : 'Publication impossible : '+(err && err.message || err);
+      erreur('errAdmin', txt);
+      $('etatPub').textContent='✖ '+txt;        // aussi à côté du bouton, là où l'on regarde
     }
   };
 }
