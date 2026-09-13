@@ -1463,11 +1463,16 @@ async function afficherDemandes(){
         <p class="note">Destinataire : <b>${ADRESSE}</b></p>
       </div>
       <h2 style="margin-top:22px">Mes demandes</h2>
-      ${liste.length ? `<table class="efm"><tr><th>Date</th><th>Objet</th><th>Bulletin</th><th>État</th></tr>
-        ${liste.map(x=>`<tr><td class="jour">${jjmm(x.date)}</td><td class="mod">${x.objet}</td>
-          <td>${x.bulletin ? x.bulletin+' <span class="det">'+Math.round((x.taille||0)/1024)+' Ko</span>' : '—'}</td>
-          <td><span class="pastille ${x.etat==='Traitée'?'fait':''}">${x.etat||'Reçue'}</span></td></tr>`).join('')}
-        </table>`
+      ${liste.length ? liste.map(x=>`
+        <div style="border:1px solid var(--ligne);border-radius:12px;padding:12px 14px;margin-top:10px;background:var(--papier)">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center">
+            <b style="font-family:'Archivo',sans-serif">${x.objet}</b>
+            ${x.etat==='Traitée'
+              ? '<span class="pastille fait">✔ Traitée par la direction</span>'
+              : '<span class="pastille" style="background:#fdf0dc;color:#8a5a16">⏳ Reçue — en cours de traitement</span>'}
+          </div>
+          <div class="det" style="margin-top:6px">Envoyée le ${jjmm(x.date)}${x.bulletin?' · bulletin joint ('+Math.round((x.taille||0)/1024)+' Ko)':''}</div>
+        </div>`).join('')
         : '<div class="vide-msg">Aucune demande pour le moment.</div>'}
       ${enLigne?'':'<p class="note">Cette liste est conservée sur cet ordinateur, pour votre mémoire.</p>'}
     </div>`;
