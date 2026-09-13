@@ -1041,11 +1041,11 @@ async function rattrapagesRecus(){
       <div class="bloc"><b>${toutes.length}</b><span>demandes</span></div>
       <div class="bloc"><b>${attente}</b><span>en attente</span></div>
     </div>
-    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>Rattrapage demandé</th><th>Motif</th><th>Réponse</th></tr>
+    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>À rattraper</th><th>Rattrapé le</th><th>Motif</th><th>Réponse</th></tr>
     ${toutes.map(x=>`<tr${x.etat!=='En attente'?' class="passe"':''}>
       <td class="jour">${jjmm(x.date)}</td>
       <td class="mod">${x.nom||'—'}<span class="det">${x.matricule||x.ref}</span></td>
-      <td>${resume(x.rattrapages)}</td>
+      <td>${resume(x.manques||x.absences)}</td><td>${resume(x.rattrapages)}</td>
       <td>${x.motif||'—'}</td>
       <td>${x.etat==='En attente'
           ? `<input class="ratrep" data-ref="${x.ref}" data-rang="${x.rang}" placeholder="un mot (facultatif)" style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--ligne);margin-bottom:6px">
@@ -1313,7 +1313,8 @@ function joursAnnee(){
   const deb=new Date((D.debut||'2026-09-07')+'T00:00:00'); const out=[];
   for(let w=0; w<42; w++) for(let j=0; j<6; j++){
     const d=new Date(deb); d.setDate(deb.getDate()+w*7+j);
-    const iso=d.toISOString().slice(0,10);
+    /* date locale (toISOString passe en UTC et reculait d'un jour : le lundi devenait dimanche) */
+    const iso=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
     out.push({iso, lib:'S'+(w+1)+' · '+dateLongue(iso)});
   }
   return out;
@@ -1343,11 +1344,14 @@ async function afficherRattrapage(){
   $('demContenu').innerHTML=`
     <div class="panneau" style="max-width:none">
       <h2>Demande de rattrapage</h2>
-      <p class="sous">Choisissez le ou les jours de rattrapage, avec les créneaux. La direction accepte ou refuse ;
-         sa réponse s'affiche ci-dessous.</p>
+      <p class="sous">1 · Les jours et créneaux à rattraper (séances non assurées) — 2 · Quand vous les rattraperez.
+         La direction accepte ou refuse ; sa réponse s'affiche ci-dessous.</p>
       <div class="erreur" id="errRat" hidden></div>
       ${db?'':'<div class="vide-msg">Stockage serveur indisponible : la demande ne peut pas être envoyée.</div>'}
-      <h3 style="font-family:'Archivo',sans-serif;font-size:14px;margin:14px 0 4px">Jours et créneaux de rattrapage</h3>
+      <h3 style="font-family:'Archivo',sans-serif;font-size:14px;margin:14px 0 4px">1 · Jours et créneaux à rattraper</h3>
+      <div id="ratAbs">${ligne('abs')}</div>
+      <button class="action fantome" id="ratAbsPlus" style="margin-top:6px;padding:6px 12px;font-size:12px">+ un autre jour à rattraper</button>
+      <h3 style="font-family:'Archivo',sans-serif;font-size:14px;margin:18px 0 4px">2 · Quand rattraper : jours et créneaux</h3>
       <div id="ratRat">${ligne('rat')}</div>
       <button class="action fantome" id="ratRatPlus" style="margin-top:6px;padding:6px 12px;font-size:12px">+ un autre jour de rattrapage</button>
       <div class="champ" style="margin-top:14px"><label for="ratMotif">Motif (facultatif)</label>
@@ -1355,8 +1359,8 @@ async function afficherRattrapage(){
       <div class="rangee"><button class="action" id="okRat" ${db?'':'disabled'}>Envoyer la demande</button></div>
       <div class="etat" id="etatRat"></div>
       <h2 style="margin-top:22px">Mes demandes de rattrapage</h2>
-      ${liste.length ? `<table class="efm"><tr><th>Date</th><th>Rattrapage</th><th>Motif</th><th>Réponse</th></tr>
-        ${liste.map(x=>`<tr><td class="jour">${jjmm(x.date)}</td><td>${resume(x.rattrapages)}</td><td>${x.motif||'—'}</td>
+      ${liste.length ? `<table class="efm"><tr><th>Date</th><th>À rattraper</th><th>Rattrapé le</th><th>Motif</th><th>Réponse</th></tr>
+        ${liste.map(x=>`<tr><td class="jour">${jjmm(x.date)}</td><td>${resume(x.manques||x.absences)}</td><td>${resume(x.rattrapages)}</td><td>${x.motif||'—'}</td>
           <td>${etatHtml(x)}${x.reponse?'<br><span class="det">'+x.reponse+'</span>':''}</td></tr>`).join('')}</table>`
         : '<div class="vide-msg">Aucune demande pour le moment.</div>'}
     </div>`;
@@ -1364,16 +1368,18 @@ async function afficherRattrapage(){
     const bloc=b.closest('.ratl'), parent=bloc.parentElement;
     if(parent.querySelectorAll('.ratl').length>1) bloc.remove(); });
   brancher();
+  $('ratAbsPlus').onclick=()=>{ $('ratAbs').insertAdjacentHTML('beforeend', ligne('abs')); brancher(); };
   $('ratRatPlus').onclick=()=>{ $('ratRat').insertAdjacentHTML('beforeend', ligne('rat')); brancher(); };
   const lire=id=>[...$(id).querySelectorAll('.ratl')].map(l=>({jour:l.querySelector('.ratj').value,
       creneaux:[...l.querySelectorAll('.ratc:checked')].map(c=>+c.value)})).filter(x=>x.creneaux.length);
   $('okRat').onclick=async()=>{
-    const rattrapages=lire('ratRat');
-    if(!rattrapages.length) return erreur('errRat','Indiquez au moins un jour de rattrapage avec ses créneaux.');
+    const manques=lire('ratAbs'), rattrapages=lire('ratRat');
+    if(!manques.length) return erreur('errRat','Indiquez au moins un jour à rattraper, avec ses créneaux.');
+    if(!rattrapages.length) return erreur('errRat','Indiquez quand vous rattraperez : au moins un jour avec ses créneaux.');
     erreur('errRat',null);
     const e=$('etatRat'); e.className='etat'; e.textContent='Envoi…';
     const o={liste:(dossier.liste||[]).concat([{date:new Date().toISOString(), nom:profil.libelle, matricule:mat,
-             rattrapages, motif:($('ratMotif').value||'').trim(), etat:'En attente', reponse:''}])};
+             manques, rattrapages, motif:($('ratMotif').value||'').trim(), etat:'En attente', reponse:''}])};
     const ok=await ecrireRattrapages(mat, o);
     if(!ok){ e.className='etat ko'; e.textContent='L\'envoi a échoué.'; return; }
     afficherRattrapage();
