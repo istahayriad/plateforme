@@ -963,7 +963,16 @@ function modulesGroupesDe(iF){
   const vus=new Map();
   (D.semaines||[]).forEach(w=>w.forEach(s=>{ if(s[0]!==iF) return;
     s[6].forEach(g=>{ const k=(D.M[s[5]]||'')+'|'+D.G[g][0]; if(!vus.has(k)) vus.set(k,{module:D.M[s[5]]||'', groupe:D.G[g][0]}); }); }));
-  return [...vus.values()].sort((a,b)=>a.groupe.localeCompare(b.groupe)||a.module.localeCompare(b.module));
+  /* ordre de priorité du planning : 3A → second rang (2A DEVOWFS/IDOSR/IDOCC/
+     IDOCS) → Métier et formation → les autres ; puis groupe et module */
+  const cat=x=>{
+    const an=(x.groupe.match(/(\d)\d\d$/)||[])[1];
+    if(an==='3') return 0;
+    if(an==='2' && /^(DEVOWFS|IDOSR|IDOCC|IDOCS)/.test(x.groupe)) return 1;
+    if(/m[eé]tier et formation/i.test(x.module)) return 2;
+    return 3;
+  };
+  return [...vus.values()].sort((a,b)=>cat(a)-cat(b)||a.groupe.localeCompare(b.groupe)||a.module.localeCompare(b.module));
 }
 async function annoncerEfm(){
   const err=m=>{ const e=$('efmErr'); if(e){ e.textContent=m; e.hidden=!m; } };
@@ -1008,14 +1017,15 @@ async function afficherEfm(){
   let form='';
   if(profil.type==='F'){
     const mg=modulesGroupesDe(profil.iF);
-    const salles=(D.S||[]).slice().sort();
+    /* salles 1 à 30 dans l'ordre numérique, sans FAD ni salle vide */
+    const salles=Array.from({length:30},(_,i)=>'S'+String(i+1).padStart(2,'0'));
     form=`<div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--papier)">
       <b style="font-family:'Archivo',sans-serif;font-size:14px">Annoncer un EFM</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px">
         <div class="champ"><label for="efmDate">Date</label><input type="date" id="efmDate"></div>
         <div class="champ"><label for="efmCr">Créneau</label><select id="efmCr">${CRENEAUX_PF.map((c,i)=>`<option value="${i}">${c}</option>`).join('')}</select></div>
         <div class="champ"><label for="efmMG">Module et groupe</label><select id="efmMG"><option value="">choisir…</option>${mg.map(x=>`<option value="${x.module}|${x.groupe}">${x.module} — ${x.groupe}</option>`).join('')}</select></div>
-        <div class="champ"><label for="efmSalle">Salle</label><select id="efmSalle"><option value="">choisir…</option>${salles.map(s=>`<option value="${s}">Salle ${String(s).replace(/^S0?/,'')}</option>`).join('')}<option value="FAD">À distance</option></select></div>
+        <div class="champ"><label for="efmSalle">Salle</label><select id="efmSalle"><option value="">choisir…</option>${salles.map(s=>`<option value="${s}">Salle ${String(s).replace(/^S0?/,'')}</option>`).join('')}</select></div>
       </div>
       ${mg.length?'':'<p class="note">Votre emploi publié ne contient aucune séance : aucun module à proposer.</p>'}
       <div class="rangee" style="margin-top:10px;align-items:center;gap:10px">
