@@ -1,0 +1,445 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>Pointage ISTA Hay Riad</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --papier:#F5F7F4; --carte:#FFFFFF; --encre:#14201C; --encre-doux:#5A6B62;
+  --ligne:#DBE3DD; --vert:#1E7A55; --vert-doux:#E4F1EA; --bleu:#2E5FA3; --bleu-doux:#E6EDF8;
+  --rouge:#A6432F; --rouge-doux:#F8E9E5; --gris-doux:#EEF1EE; --ombre:0 1px 2px rgba(20,32,28,.06), 0 8px 24px rgba(20,32,28,.08);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --papier:#101613; --carte:#18211D; --encre:#E9EFEA; --encre-doux:#95A69C;
+  --ligne:#27332C; --vert:#4FB98A; --vert-doux:#153027; --bleu:#7CA6E8; --bleu-doux:#16243A;
+  --rouge:#E08A76; --rouge-doux:#33201B; --gris-doux:#212B25; --ombre:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  --papier:#101613; --carte:#18211D; --encre:#E9EFEA; --encre-doux:#95A69C;
+  --ligne:#27332C; --vert:#4FB98A; --vert-doux:#153027; --bleu:#7CA6E8; --bleu-doux:#16243A;
+  --rouge:#E08A76; --rouge-doux:#33201B; --gris-doux:#212B25; --ombre:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--papier); color:var(--encre); font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:15px; line-height:1.5;}
+.enveloppe{max-width:900px; margin:0 auto; padding:18px 16px 60px;}
+header.tete{display:flex; align-items:center; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--ligne); flex-wrap:wrap;}
+header.tete .txt{flex:1 1 200px;}
+header.tete h1{font-family:'Archivo',sans-serif; font-size:18px; font-weight:800; margin:0;}
+header.tete p{margin:2px 0 0; font-size:12px; color:var(--encre-doux);}
+button{font-family:inherit; cursor:pointer;}
+.choix{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:26px;}
+.porte{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:26px 22px; text-align:left; font:inherit; color:inherit; box-shadow:var(--ombre);}
+.porte .pict{font-size:34px; line-height:1;}
+.porte h2{font-family:'Archivo',sans-serif; font-size:18px; margin:10px 0 4px;}
+.porte p{margin:0; font-size:13px; color:var(--encre-doux);}
+
+/* ---- Agent : très gros, très peu de texte ---- */
+.pin{max-width:340px; margin:60px auto; text-align:center;}
+.pin h2{font-family:'Archivo',sans-serif; font-size:20px;}
+.pinBoites{display:flex; gap:10px; justify-content:center; margin:20px 0;}
+.pinBoites input{width:52px; height:64px; text-align:center; font-size:28px; border:2px solid var(--ligne); border-radius:12px; background:var(--carte); color:var(--encre);}
+.gros{width:100%; padding:20px; font-size:20px; font-weight:700; border-radius:14px; border:none; background:var(--vert); color:#fff; box-shadow:var(--ombre);}
+.jourBandeau{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:18px; text-align:center; box-shadow:var(--ombre); margin-top:14px;}
+.jourBandeau .date{font-family:'Archivo',sans-serif; font-size:20px; font-weight:800;}
+.jourBandeau .heure{font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--vert); margin-top:4px;}
+.creneaux{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:16px;}
+.creneaux button{padding:22px 8px; border-radius:16px; border:2px solid var(--ligne); background:var(--carte); font-size:16px; font-weight:700; box-shadow:var(--ombre); color:var(--encre);}
+.creneaux button .h{display:block; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; color:var(--encre-doux); margin-top:2px;}
+.creneaux button.actuel{border-color:var(--vert); background:var(--vert-doux); color:var(--vert);}
+.compteur{text-align:center; font-size:14px; color:var(--encre-doux); margin:14px 0 4px;}
+.ligneF{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:16px; margin-top:12px; box-shadow:var(--ombre);}
+.ligneF .nom{font-family:'Archivo',sans-serif; font-size:19px; font-weight:800;}
+.ligneF .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
+.ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+.bp,.ba{padding:18px 6px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:22px; font-weight:800; color:var(--encre-doux);}
+.bp.on{border-color:var(--vert); background:var(--vert); color:#fff;}
+.ba.on{border-color:var(--rouge); background:var(--rouge); color:#fff;}
+.videMsg{text-align:center; padding:50px 20px; color:var(--encre-doux); font-size:16px;}
+.lien-retour{display:block; text-align:center; margin-top:22px; color:var(--encre-doux); font-size:13px; background:none; border:none;}
+
+/* ---- Responsable ---- */
+.champ{display:flex; flex-direction:column; gap:5px; margin-bottom:12px;}
+.champ label{font-size:12px; font-weight:600; color:var(--encre-doux);}
+.champ input{padding:11px 12px; border-radius:10px; border:1px solid var(--ligne); background:var(--carte); color:var(--encre); font-size:14px;}
+.action{padding:11px 18px; border-radius:10px; border:none; background:var(--vert); color:#fff; font-weight:700; font-size:14px;}
+.action.fantome{background:none; border:1px solid var(--ligne); color:var(--encre);}
+.erreur{color:var(--rouge); font-size:12.5px;}
+.onglets{display:flex; gap:8px; margin:18px 0 14px; flex-wrap:wrap;}
+.onglets button{padding:9px 16px; border-radius:999px; border:1px solid var(--ligne); background:var(--carte); color:var(--encre); font-size:13px; font-weight:600;}
+.onglets button.on{background:var(--encre); color:var(--papier); border-color:var(--encre);}
+table.pointage{width:100%; border-collapse:collapse; font-size:13px; background:var(--carte); border-radius:14px; overflow:hidden; box-shadow:var(--ombre);}
+table.pointage th{background:var(--gris-doux); padding:9px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--encre-doux);}
+table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
+.etat{display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px; font-size:12px; font-weight:700;}
+.etat.present{background:var(--vert-doux); color:var(--vert);}
+.etat.absent{background:var(--rouge-doux); color:var(--rouge);}
+.etat.attente{background:var(--gris-doux); color:var(--encre-doux);}
+.cadre-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+.resume{display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; margin-bottom:16px;}
+.resume .bloc{background:var(--carte); border:1px solid var(--ligne); border-radius:12px; padding:12px; text-align:center; box-shadow:var(--ombre);}
+.resume .bloc b{display:block; font-family:'Archivo',sans-serif; font-size:22px;}
+.resume .bloc span{font-size:11px; color:var(--encre-doux);}
+.note{font-size:12.5px; color:var(--encre-doux);}
+[hidden]{display:none!important;}
+</style>
+
+<div class="enveloppe">
+  <header class="tete">
+    <div class="txt">
+      <h1>ISTA Hay Riad — Pointage des formateurs</h1>
+      <p id="piedEtat">Chargement…</p>
+    </div>
+  </header>
+
+  <!-- ============ ACCUEIL ============ -->
+  <section id="vueAccueil">
+    <div class="choix">
+      <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Agent de sécurité</h2><p>Pointer les formateurs pendant la tournée.</p></button>
+      <button class="porte" id="porteAdmin"><div class="pict">👤</div><h2>Responsable</h2><p>Voir l'état de présence en temps réel.</p></button>
+    </div>
+  </section>
+
+  <!-- ============ AGENT ============ -->
+  <section id="vueAgent" hidden>
+    <div class="pin" id="ecranPin">
+      <h2>Code d'accès</h2>
+      <p class="note">Demandez le code de 4 chiffres au responsable du planning.</p>
+      <div class="pinBoites">
+        <input inputmode="numeric" maxlength="1" class="pc">
+        <input inputmode="numeric" maxlength="1" class="pc">
+        <input inputmode="numeric" maxlength="1" class="pc">
+        <input inputmode="numeric" maxlength="1" class="pc">
+      </div>
+      <p class="erreur" id="errPin" hidden>Code incorrect.</p>
+      <button class="lien-retour" data-retour>← retour</button>
+    </div>
+    <div id="ecranTournee" hidden>
+      <div class="jourBandeau">
+        <div class="date" id="dateAujourdhui"></div>
+        <div class="heure" id="heureActuelle"></div>
+      </div>
+      <div class="creneaux" id="boutonsCreneaux"></div>
+      <div id="listeFormateurs"></div>
+      <button class="lien-retour" id="btnDeconnexionAgent">← changer d'appareil / se déconnecter</button>
+    </div>
+  </section>
+
+  <!-- ============ RESPONSABLE ============ -->
+  <section id="vueAdmin" hidden>
+    <div id="admGate">
+      <div class="champ"><label for="admEmail">E-mail</label><input id="admEmail" type="email" autocomplete="username" value="achraf.elgharabi@ofppt.ma"></div>
+      <div class="champ"><label for="admMdp">Mot de passe</label><input id="admMdp" type="password" autocomplete="current-password"></div>
+      <p class="erreur" id="errAdm" hidden></p>
+      <div style="display:flex;gap:10px">
+        <button class="action" id="okAdm">Entrer</button>
+        <button class="action fantome" data-retour>Retour</button>
+      </div>
+    </div>
+    <div id="admContenu" hidden>
+      <div class="onglets">
+        <button data-onglet="jour" class="on">Aujourd'hui</button>
+        <button data-onglet="semaine">Cette semaine</button>
+      </div>
+      <div id="admJour"></div>
+      <div id="admSemaine" hidden></div>
+      <button class="lien-retour" id="btnDeconnexionAdmin">← se déconnecter</button>
+    </div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+/* ===================================================================
+   POINTAGE DES FORMATEURS — ISTA HAY RIAD (16/09/2026)
+   Application indépendante de la plateforme de consultation, mais sur le
+   MÊME projet Firebase (emploi-ista-hay-riad) : elle lit les emplois déjà
+   publiés (pub/meta, pub/s<n>) pour savoir qui doit être où, et écrit dans
+   une collection à elle (pointage/s<n>) pour ne jamais toucher aux données
+   de la plateforme de consultation.
+   Deux portes : Agent de sécurité (code à 4 chiffres, très gros boutons,
+   aucune lecture complexe) et Responsable (compte Firebase du planning,
+   état en temps réel du jour et de la semaine). =================== */
+const $=id=>document.getElementById(id);
+const FIREBASE_CONFIG={
+  apiKey: "AIzaSyCgVQtJdrsIsS2bvpkqZSMH7pPJGm_IlO8",
+  authDomain: "emploi-ista-hay-riad.firebaseapp.com",
+  projectId: "emploi-ista-hay-riad",
+  storageBucket: "emploi-ista-hay-riad.firebasestorage.app",
+  messagingSenderId: "683780273492",
+  appId: "1:683780273492:web:f00ef52a85898b39d504c1"
+};
+const ADMIN_EMAIL='achraf.elgharabi@ofppt.ma';
+/* Code de l'agent — à changer ici si besoin (4 chiffres). Le responsable le
+   communique de vive voix à l'agent de sécurité. */
+const CODE_AGENT='2026';
+const CRENEAUX=['08h30 – 11h00','11h00 – 13h30','13h30 – 16h00','16h00 – 18h30'];
+const BORNES=[[8*60+30,11*60],[11*60,13*60+30],[13*60+30,16*60],[16*60,18*60+30]];
+const JOURS=['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+let fs=null, fbAuth=null;
+async function ouvrirFirebase(){
+  try{
+    if(!window.firebase) throw new Error('SDK Firebase non chargé');
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    fs=firebase.firestore(); fbAuth=firebase.auth();
+  }catch(e){ console.error('Firebase', e); fs=null; }
+}
+/* Chaque document est rangé en JSON texte (Firestore refuse les tableaux
+   imbriqués) — même convention que la plateforme de consultation. */
+const docJ=p=>fs.doc(p);
+async function lireDoc(p){
+  const s=await docJ(p).get();
+  if(!s.exists) return null;
+  const o=s.data()||{};
+  if(typeof o.j==='string'){ try{ return JSON.parse(o.j); }catch(e){ return null; } }
+  return o;
+}
+async function ecrireDoc(p, obj){ await docJ(p).set({j:JSON.stringify(obj), maj:new Date().toISOString()}); }
+
+/* ------------------------- emplois publiés ------------------------- */
+let META=null;                 // {dates, lundis, nomAff, nomFam, F, G, M, S, nbSem}
+let SEMAINE_CACHE={};          // w -> sessions
+async function chargerMeta(){
+  META=await lireDoc('pub/meta');
+  return META;
+}
+async function chargerSemaine(w){
+  if(SEMAINE_CACHE[w]) return SEMAINE_CACHE[w];
+  const d=await lireDoc('pub/s'+w);
+  const s=(d && d.sessions) || [];
+  SEMAINE_CACHE[w]=s;
+  return s;
+}
+/* date locale (pas toISOString, qui décale au fuseau UTC) */
+function isoLocal(d){ const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+function dateDepuisIso(iso){ const d=new Date(iso+'T00:00:00'); return d; }
+/* trouve la semaine (index) et le jour (0-5) d'aujourd'hui, à partir des
+   lundis publiés par le générateur */
+function semaineEtJourDuJour(){
+  if(!META || !META.lundis || !META.lundis.length) return null;
+  const auj=new Date(); auj.setHours(0,0,0,0);
+  for(let w=META.lundis.length-1; w>=0; w--){
+    const lundi=dateDepuisIso(META.lundis[w]);
+    const diff=Math.round((auj-lundi)/86400000);
+    if(diff>=0 && diff<=5) return {w, jour:diff};
+  }
+  return null;
+}
+function creneauActuel(){
+  const n=new Date(); const m=n.getHours()*60+n.getMinutes();
+  for(let i=0;i<BORNES.length;i++) if(m>=BORNES[i][0] && m<=BORNES[i][1]) return i;
+  return -1;
+}
+function dateLongue(d){
+  const s=JOURS[(d.getDay()+6)%7]+' '+d.getDate()+' '+MOIS[d.getMonth()]+' '+d.getFullYear();
+  return s.charAt(0).toUpperCase()+s.slice(1);   // seule la première lettre, pas « Septembre »
+}
+
+/* ------------------------- navigation ------------------------- */
+function vue(n){ ['Accueil','Agent','Admin'].forEach(v=>$('vue'+v).hidden=(v!==n)); }
+$('porteAgent').onclick=()=>{ vue('Agent'); ouvrirAgent(); };
+$('porteAdmin').onclick=()=>{ vue('Admin'); ouvrirAdmin(); };
+document.querySelectorAll('[data-retour]').forEach(b=>b.onclick=()=>vue('Accueil'));
+
+/* ------------------------- AGENT ------------------------- */
+function ouvrirAgent(){
+  let code=null; try{ code=localStorage.getItem('pointageCodeAgent'); }catch(e){}
+  if(code===CODE_AGENT){ $('ecranPin').hidden=true; demarrerTournee(); }
+  else { $('ecranPin').hidden=false; $('ecranTournee').hidden=true;
+    document.querySelectorAll('.pc').forEach(i=>i.value='');
+    document.querySelector('.pc').focus(); }
+}
+/* querySelectorAll renvoie une NodeList : pas de .every()/.map() natifs sur
+   certains moteurs — on la convertit en tableau une fois pour toutes. */
+const PC=[...document.querySelectorAll('.pc')];
+PC.forEach((inp,i)=>{
+  inp.oninput=()=>{
+    inp.value=inp.value.replace(/\D/g,'').slice(0,1);
+    if(inp.value && PC[i+1]) PC[i+1].focus();
+    if(PC.every(x=>x.value)){
+      const saisi=PC.map(x=>x.value).join('');
+      if(saisi===CODE_AGENT){
+        try{ localStorage.setItem('pointageCodeAgent', CODE_AGENT); }catch(e){}
+        $('errPin').hidden=true; $('ecranPin').hidden=true; demarrerTournee();
+      } else { $('errPin').hidden=false; PC.forEach(x=>x.value=''); PC[0].focus(); }
+    }
+  };
+});
+$('btnDeconnexionAgent').onclick=()=>{ try{ localStorage.removeItem('pointageCodeAgent'); }catch(e){} vue('Accueil'); };
+
+let AGENT_SW=null, AGENT_JOUR=null, AGENT_CRENEAU=-1;
+async function demarrerTournee(){
+  $('ecranTournee').hidden=false;
+  $('listeFormateurs').innerHTML='<p class="videMsg">Chargement…</p>';
+  if(!META) await chargerMeta();
+  const info=semaineEtJourDuJour();
+  const auj=new Date();
+  $('dateAujourdhui').textContent=dateLongue(auj);
+  const maj=()=>{ $('heureActuelle').textContent=auj.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); };
+  maj(); setInterval(()=>{ const n=new Date(); $('heureActuelle').textContent=n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }, 30000);
+  if(!info){
+    $('boutonsCreneaux').innerHTML='';
+    $('listeFormateurs').innerHTML='<p class="videMsg">Aucun emploi publié pour aujourd\'hui. Contactez le service planning.</p>';
+    return;
+  }
+  AGENT_SW=info.w; AGENT_JOUR=info.jour;
+  const actuel=creneauActuel();
+  AGENT_CRENEAU = actuel>=0 ? actuel : 0;
+  $('boutonsCreneaux').innerHTML=CRENEAUX.map((c,i)=>
+    `<button data-cr="${i}" class="${i===actuel?'actuel':''}">${i+1}ᵉ créneau<span class="h">${c}</span></button>`).join('');
+  $('boutonsCreneaux').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_CRENEAU=+b.dataset.cr;
+    $('boutonsCreneaux').querySelectorAll('button').forEach(x=>x.classList.toggle('actuel', x===b));
+    afficherFormateursDuCreneau();
+  });
+  afficherFormateursDuCreneau();
+}
+async function afficherFormateursDuCreneau(){
+  const box=$('listeFormateurs');
+  box.innerHTML='<p class="videMsg">Chargement…</p>';
+  const sessions=await chargerSemaine(AGENT_SW);
+  const ici=sessions.filter(s=>s[1]===AGENT_JOUR && s[2]===AGENT_CRENEAU);
+  if(!ici.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
+  const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
+  const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
+  const marques=(pointage[cle]) || {};
+  const lignes=ici.map((s,idx)=>{
+    const fi=s[0], type=s[3], salleI=s[4], modI=s[5], groupesI=s[6]||[];
+    const nom=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
+    const groupe=groupesI.map(gi=>(META.G[gi]||[])[0]).filter(Boolean).join(', ');
+    const salle=type===1 ? 'à distance' : (META.S[salleI] ? 'salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'salle à affecter');
+    const etat=marques[fi] ? marques[fi].etat : null;
+    return `<div class="ligneF" data-fi="${fi}">
+      <div class="nom">${nom}</div>
+      <div class="det">${groupe||'—'} · ${salle}</div>
+      <div class="boutons">
+        <button class="bp ${etat==='present'?'on':''}" data-fi="${fi}" data-etat="present">✓ Présent</button>
+        <button class="ba ${etat==='absent'?'on':''}" data-fi="${fi}" data-etat="absent">✗ Absent</button>
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML=lignes;
+  const nMarques=ici.filter(s=>marques[s[0]]).length;
+  box.insertAdjacentHTML('afterbegin', `<div class="compteur">${nMarques} / ${ici.length} pointés</div>`);
+  box.querySelectorAll('button[data-etat]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const fi=+btn.dataset.fi, etat=btn.dataset.etat;
+      const ligne=btn.closest('.ligneF');
+      ligne.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      try{
+        const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
+        if(!p[cle]) p[cle]={};
+        p[cle][fi]={etat, heure:new Date().toISOString()};
+        await ecrireDoc('pointage/s'+AGENT_SW, p);
+        afficherFormateursDuCreneau();   // recompte le compteur
+      }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
+    };
+  });
+}
+
+/* ------------------------- RESPONSABLE ------------------------- */
+async function ouvrirAdmin(){
+  await ouvrirFirebase();
+  if(fbAuth && fbAuth.currentUser){ $('admGate').hidden=true; $('admContenu').hidden=false; demarrerAdmin(); }
+  else { $('admGate').hidden=false; $('admContenu').hidden=true; }
+}
+$('okAdm').onclick=async()=>{
+  const email=$('admEmail').value.trim(), mdp=$('admMdp').value;
+  const err=$('errAdm'); err.hidden=true;
+  if(!mdp){ err.textContent='Saisissez le mot de passe.'; err.hidden=false; return; }
+  try{
+    await ouvrirFirebase();
+    await fbAuth.signInWithEmailAndPassword(email, mdp);
+    $('admGate').hidden=true; $('admContenu').hidden=false; demarrerAdmin();
+  }catch(e){ err.textContent='Connexion refusée : '+(e.message||e); err.hidden=false; }
+};
+$('btnDeconnexionAdmin').onclick=async()=>{ try{ await fbAuth.signOut(); }catch(e){} vue('Accueil'); };
+document.querySelectorAll('.onglets button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.onglets button').forEach(x=>x.classList.toggle('on', x===b));
+  $('admJour').hidden = b.dataset.onglet!=='jour';
+  $('admSemaine').hidden = b.dataset.onglet!=='semaine';
+});
+
+let ADMIN_UNSUB=null;
+async function demarrerAdmin(){
+  await ouvrirFirebase();
+  if(!META) await chargerMeta();
+  const info=semaineEtJourDuJour();
+  if(!info){ $('admJour').innerHTML='<p class="note">Aucun emploi publié pour aujourd\'hui.</p>'; return; }
+  const sessions=await chargerSemaine(info.w);
+  if(ADMIN_UNSUB) ADMIN_UNSUB();
+  ADMIN_UNSUB=fs.doc('pointage/s'+info.w).onSnapshot(snap=>{
+    let pointage={};
+    if(snap.exists){ const o=snap.data()||{}; try{ pointage=JSON.parse(o.j||'{}'); }catch(e){} }
+    rendreJour(sessions, info.jour, pointage);
+    rendreSemaine(sessions, pointage);
+  }, err=>{ console.error(err); $('admJour').innerHTML='<p class="erreur">Lecture impossible : '+err.message+'</p>'; });
+}
+function rendreJour(sessions, jour, pointage){
+  const auj=new Date();
+  const ici=sessions.filter(s=>s[1]===jour).sort((a,b)=>a[2]-b[2] || a[0]-b[0]);
+  const nPresent=ici.filter(s=>{ const c=pointage[jour+'_'+s[2]]; return c && c[s[0]] && c[s[0]].etat==='present'; }).length;
+  const nAbsent=ici.filter(s=>{ const c=pointage[jour+'_'+s[2]]; return c && c[s[0]] && c[s[0]].etat==='absent'; }).length;
+  const nAttente=ici.length-nPresent-nAbsent;
+  let html=`<p class="note" style="margin-bottom:10px">${dateLongue(auj)} — mis à jour en direct.</p>
+    <div class="resume">
+      <div class="bloc"><b>${ici.length}</b><span>séances prévues</span></div>
+      <div class="bloc" style="color:var(--vert)"><b>${nPresent}</b><span>présents</span></div>
+      <div class="bloc" style="color:var(--rouge)"><b>${nAbsent}</b><span>absents</span></div>
+      <div class="bloc"><b>${nAttente}</b><span>en attente</span></div>
+    </div>`;
+  if(!ici.length){ html+='<p class="videMsg">Aucun cours aujourd\'hui.</p>'; $('admJour').innerHTML=html; return; }
+  html+=`<div class="cadre-scroll"><table class="pointage"><tr><th>Créneau</th><th>Formateur</th><th>Groupe</th><th>État</th><th>Heure</th></tr>`;
+  ici.forEach(s=>{
+    const fi=s[0], c=pointage[jour+'_'+s[2]], marque=c && c[fi];
+    const nom=META.nomAff[fi]||META.F[fi]||'—';
+    const groupe=(s[6]||[]).map(gi=>(META.G[gi]||[])[0]).filter(Boolean).join(', ');
+    const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
+      : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
+      : '<span class="etat absent">✗ absent</span>';
+    const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    html+=`<tr><td>${CRENEAUX[s[2]]}</td><td>${nom}</td><td>${groupe||'—'}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
+  });
+  html+='</table></div>';
+  $('admJour').innerHTML=html;
+}
+function rendreSemaine(sessions, pointage){
+  const parF={};
+  sessions.forEach(s=>{
+    const fi=s[0];
+    const o=parF[fi]||(parF[fi]={prevu:0, present:0, absent:0});
+    o.prevu++;
+    const c=pointage[s[1]+'_'+s[2]], m=c && c[fi];
+    if(m && m.etat==='present') o.present++;
+    else if(m && m.etat==='absent') o.absent++;
+  });
+  const lignes=Object.keys(parF).map(Number).sort((a,b)=>(META.nomAff[a]||'').localeCompare(META.nomAff[b]||''));
+  if(!lignes.length){ $('admSemaine').innerHTML='<p class="videMsg">Aucun emploi cette semaine.</p>'; return; }
+  let html=`<div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Séances prévues</th><th>Présent</th><th>Absent</th><th>En attente</th><th>Taux</th></tr>`;
+  lignes.forEach(fi=>{
+    const o=parF[fi];
+    const attente=o.prevu-o.present-o.absent;
+    const taux=o.prevu? Math.round(100*o.present/o.prevu)+' %' : '—';
+    html+=`<tr><td>${META.nomAff[fi]||META.F[fi]||'—'}</td><td>${o.prevu}</td>
+      <td style="color:var(--vert);font-weight:700">${o.present}</td>
+      <td style="color:var(--rouge);font-weight:700">${o.absent}</td>
+      <td>${attente}</td><td>${taux}</td></tr>`;
+  });
+  html+='</table></div>';
+  $('admSemaine').innerHTML=html;
+}
+
+/* ------------------------- démarrage ------------------------- */
+(async function(){
+  await ouvrirFirebase();
+  try{
+    await chargerMeta();
+    $('piedEtat').textContent = META
+      ? 'Emplois publiés : '+(META.nbSem||0)+' semaines · '+(META.F||[]).length+' formateurs'
+      : 'Aucun emploi publié pour le moment.';
+  }catch(e){ $('piedEtat').textContent='Connexion au serveur indisponible.'; }
+})();
+</script>
+</body></html>
