@@ -483,6 +483,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
         <button data-sadm="pub" class="on">Publication</button>
         <button data-sadm="abs">Absences</button>
         <button data-sadm="dem">Demandes des formateurs</button>
+        <button data-sadm="efm">Dates EFM</button>
         <button data-sadm="outils">Outils</button>
       </div>
 
@@ -500,9 +501,11 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
             <input type="file" id="fListes" accept=".xlsx,.xlsm,.csv">
             <div class="etat" id="etatListes"></div>
           </fieldset>
-          <fieldset>
+          <!-- Depuis le 16/09 les EFM sont annoncés par les formateurs eux-mêmes
+               (sous-page « Dates EFM ») : le dépôt du classeur est masqué,
+               conservé pour les identifiants utilisés par le code. -->
+          <fieldset hidden>
             <legend>3 · Dates des EFM</legend>
-            <p class="note">Classeur <b>DATE EFM</b> rempli par les formateurs : groupe, module, date, créneau, salle, formateur.</p>
             <input type="file" id="fEfm" accept=".xlsx,.xlsm,.csv">
             <div class="etat" id="etatEfm"></div>
           </fieldset>
@@ -541,6 +544,17 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
           <legend>Demandes de rattrapage</legend>
           <p class="note">Jours et créneaux de rattrapage demandés par les formateurs : acceptez ou refusez, le formateur voit votre réponse.</p>
           <div id="zoneRatRecues"></div>
+        </fieldset>
+      </div>
+
+      <div class="sous-admin" data-page="efm" hidden>
+        <fieldset>
+          <legend>Dates des EFM annoncées par les formateurs</legend>
+          <p class="note">Chaque formateur annonce ses EFM dans son espace (date, créneau, module et groupe, salle). Les stagiaires du groupe les voient dans « Dates EFM ».</p>
+          <div class="rangee" style="margin-top:4px">
+            <button class="action fantome" id="btnEfmRecus">Actualiser</button>
+          </div>
+          <div id="zoneEfmRecus"></div>
         </fieldset>
       </div>
 
@@ -914,8 +928,26 @@ function dateLisible(iso){
   if(isNaN(d)) return iso;
   return JSEM[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()]+' '+d.getFullYear();
 }
+/* EFM ANNONCÉS PAR LES FORMATEURS (16/09) : plus de classeur à déposer — chaque
+   formateur saisit ses dates dans « Dates EFM » (date, créneau, module et
+   groupe pris dans son emploi, salle). Dossier Firestore efm/<matricule> =
+   {nom, liste:[{groupe, module, date, creneau, salle}]}. Ces dates sont vues
+   par la direction et par les stagiaires du groupe. Le classeur déposé
+   autrefois (D.efm) reste lu s'il existe. */
+let EFM_SAISIS=null;           // [[groupe, module, date, créneau, salle, formateur, mat, rang]]
+async function chargerEfmSaisis(force){
+  if(EFM_SAISIS && !force) return EFM_SAISIS;
+  EFM_SAISIS=[];
+  if(!db) return EFM_SAISIS;
+  try{
+    const s=await db.collection('efm').get();
+    (s.docs||[]).forEach(d=>{ const o=d.data||{};
+      (o.liste||[]).forEach((x,i)=>EFM_SAISIS.push([x.groupe, x.module, x.date, CRENEAUX_PF[x.creneau]||'', x.salle||'', o.nom||d.id, d.id, i])); });
+  }catch(e){ console.warn('efm', e); }
+  return EFM_SAISIS;
+}
 function efmDuProfil(){
-  const tout=(D.efm||[]);
+  const tout=(D.efm||[]).concat(EFM_SAISIS||[]);
   if(profil.type==='S') return tout.filter(e=>norm(e[0])===norm(profil.groupe));
   const gs=groupesDuFormateur(profil.iF).map(i=>norm(D.G[i][0]));
   /* le classeur EFM écrit le nom comme la base AP (« FATIMA MOUHTAT »), la
@@ -924,7 +956,38 @@ function efmDuProfil(){
   const mots=s=>(s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()
                  .split(/[^A-Z0-9]+/).filter(Boolean).sort().join(' ');
   const moi=[profil.libelle, (D.F||[])[profil.iF]||''].map(mots);
-  return tout.filter(e=>gs.includes(norm(e[0])) || moi.includes(mots(e[5])));
+  return tout.filter(e=>e[6]===profil.matricule || gs.includes(norm(e[0])) || moi.includes(mots(e[5])));
+}
+/* couples (module, groupe) de l'emploi publié de ce formateur */
+function modulesGroupesDe(iF){
+  const vus=new Map();
+  (D.semaines||[]).forEach(w=>w.forEach(s=>{ if(s[0]!==iF) return;
+    s[6].forEach(g=>{ const k=(D.M[s[5]]||'')+'|'+D.G[g][0]; if(!vus.has(k)) vus.set(k,{module:D.M[s[5]]||'', groupe:D.G[g][0]}); }); }));
+  return [...vus.values()].sort((a,b)=>a.groupe.localeCompare(b.groupe)||a.module.localeCompare(b.module));
+}
+async function annoncerEfm(){
+  const err=m=>{ const e=$('efmErr'); if(e){ e.textContent=m; e.hidden=!m; } };
+  const date=$('efmDate').value, cr=+$('efmCr').value, mg=$('efmMG').value, salle=$('efmSalle').value;
+  if(!date) return err('Choisissez la date.');
+  if(!mg) return err('Choisissez le module et le groupe.');
+  if(!salle) return err('Choisissez la salle.');
+  if(!db) return err('Stockage serveur indisponible.');
+  const [module,groupe]=mg.split('|');
+  const ref=db.doc('efm/'+profil.matricule);
+  let o={}; try{ const s=await ref.get(); o=s.data||{}; }catch(e){}
+  const liste=(o.liste||[]).filter(x=>!(x.date===date && x.creneau===cr && x.groupe===groupe && x.module===module));
+  liste.push({groupe, module, date, creneau:cr, salle, maj:new Date().toISOString()});
+  try{ await ref.set({nom:profil.libelle, matricule:profil.matricule, liste}); }
+  catch(e){ return err('Envoi échoué : '+(e.message||e)); }
+  err(''); await chargerEfmSaisis(true); afficherEfm();
+}
+async function retirerEfm(mat, rang){
+  if(!db) return;
+  const ref=db.doc('efm/'+mat);
+  let o={}; try{ const s=await ref.get(); o=s.data||{}; }catch(e){ return; }
+  const liste=(o.liste||[]); liste.splice(rang,1);
+  try{ await ref.set({...o, liste}); }catch(e){ return; }
+  await chargerEfmSaisis(true);
 }
 /* la mention « faites glisser » n'apparaît que si le tableau déborde vraiment */
 function majGlisser(zone){
@@ -932,16 +995,39 @@ function majGlisser(zone){
   if(!el || !cadre) return;
   el.classList.toggle('montrer', cadre.scrollWidth > cadre.clientWidth + 2);
 }
-function afficherEfm(){
+async function afficherEfm(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
   $('mesGroupes').hidden=true; $('vueEfm').hidden=false; $('btnImp').hidden=true; $('vueAbs').hidden=true;
-  const liste=efmDuProfil().slice().sort((a,b)=>(a[2]||'').localeCompare(b[2]||''));
   $('titreEmploi').textContent='Dates des EFM';
+  if(!EFM_SAISIS){ $('vueEfm').innerHTML='<p class="etat">Lecture…</p>'; await chargerEfmSaisis(); }
+  const liste=efmDuProfil().slice().sort((a,b)=>(a[2]||'').localeCompare(b[2]||''));
   $('metaEmploi').textContent=(profil.type==='S'? 'Groupe '+profil.groupe : profil.libelle)+
     ' · '+liste.length+' examen'+(liste.length>1?'s':'')+' annoncé'+(liste.length>1?'s':'');
+  /* formateur : il annonce lui-même ses EFM ; les choix viennent de son emploi
+     publié (modules et groupes) et de la liste des salles */
+  let form='';
+  if(profil.type==='F'){
+    const mg=modulesGroupesDe(profil.iF);
+    const salles=(D.S||[]).slice().sort();
+    form=`<div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--papier)">
+      <b style="font-family:'Archivo',sans-serif;font-size:14px">Annoncer un EFM</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px">
+        <div class="champ"><label for="efmDate">Date</label><input type="date" id="efmDate"></div>
+        <div class="champ"><label for="efmCr">Créneau</label><select id="efmCr">${CRENEAUX_PF.map((c,i)=>`<option value="${i}">${c}</option>`).join('')}</select></div>
+        <div class="champ"><label for="efmMG">Module et groupe</label><select id="efmMG"><option value="">choisir…</option>${mg.map(x=>`<option value="${x.module}|${x.groupe}">${x.module} — ${x.groupe}</option>`).join('')}</select></div>
+        <div class="champ"><label for="efmSalle">Salle</label><select id="efmSalle"><option value="">choisir…</option>${salles.map(s=>`<option value="${s}">Salle ${String(s).replace(/^S0?/,'')}</option>`).join('')}<option value="FAD">À distance</option></select></div>
+      </div>
+      ${mg.length?'':'<p class="note">Votre emploi publié ne contient aucune séance : aucun module à proposer.</p>'}
+      <div class="rangee" style="margin-top:10px;align-items:center;gap:10px">
+        <button class="action" id="btnEfmOk">Annoncer cet EFM</button>
+        <span class="erreur" id="efmErr" hidden></span>
+      </div>
+    </div>`;
+  }
   if(!liste.length){
-    $('vueEfm').innerHTML='<div class="vide-msg">Aucune date d\'examen de fin de module n\'a encore été publiée'+
-      (profil.type==='S'?' pour votre groupe':' pour vos groupes')+'. Elles apparaîtront ici dès que le service planning les aura déposées.</div>';
+    $('vueEfm').innerHTML=form+'<div class="vide-msg">Aucune date d\'examen de fin de module n\'a encore été annoncée'+
+      (profil.type==='S'?' pour votre groupe':' pour vos groupes')+'.</div>';
+    const b=$('btnEfmOk'); if(b) b.onclick=annoncerEfm;
     return;
   }
   const auj=new Date(); auj.setHours(0,0,0,0);
@@ -953,16 +1039,19 @@ function afficherEfm(){
                : jours<=7 ? '<span class="pastille bientot">dans '+jours+' j</span>'
                : '<span class="pastille">dans '+jours+' j</span>';
     const gauche = profil.type==='S' ? (e[5]||'') : (e[0]||'');
+    const mien = profil.type==='F' && e[6]===profil.matricule;
     return `<tr class="${jours!==null&&jours<0?'passe':''}">
       <td class="jour">${dateLisible(e[2])}<span class="det">${e[3]||''}</span></td>
       <td class="mod">${e[1]||''}<span class="det">${gauche}</span></td>
-      <td class="quand">${e[4]? 'Salle '+String(e[4]).replace(/^S0?/,'') : '—'}</td>
-      <td>${etat}</td></tr>`;
+      <td class="quand">${e[4]==='FAD' ? 'À distance' : e[4] ? 'Salle '+String(e[4]).replace(/^S0?/,'') : '—'}</td>
+      <td>${etat}${mien?` <button class="action fantome" style="padding:3px 9px;font-size:11px;margin-left:6px" data-efmret="${e[6]}" data-rang="${e[7]}">retirer</button>`:''}</td></tr>`;
   }).join('');
-  $('vueEfm').innerHTML=`<p class="glisser">Faites glisser le tableau vers la gauche pour voir la suite.</p>
+  $('vueEfm').innerHTML=form+`<p class="glisser">Faites glisser le tableau vers la gauche pour voir la suite.</p>
     <div class="cadre-abs"><table class="efm"><tr><th>Date</th>
       <th>Module ${profil.type==='S'?'et formateur':'et groupe'}</th><th>Salle</th><th>Échéance</th></tr>${lignes}</table></div>`;
   majGlisser($('vueEfm'));
+  const b=$('btnEfmOk'); if(b) b.onclick=annoncerEfm;
+  $('vueEfm').querySelectorAll('[data-efmret]').forEach(x=>x.onclick=async()=>{ await retirerEfm(x.dataset.efmret,+x.dataset.rang); afficherEfm(); });
 }
 function choisirOnglet(o){
   onglet=o;
@@ -1023,6 +1112,26 @@ async function dessinerPdf(dataUrl, boite){
   }
 }
 /* Demandes de rattrapage reçues : accepter / refuser, avec un mot pour le formateur. */
+/* Direction : toutes les dates d'EFM annoncées par les formateurs */
+async function efmRecus(){
+  const box=$('zoneEfmRecus'); if(!box) return;
+  if(!db){ box.innerHTML='<div class="vide-msg">Stockage serveur indisponible.</div>'; return; }
+  box.innerHTML='<p class="etat">Lecture…</p>';
+  const l=(await chargerEfmSaisis(true)).slice().sort((a,b)=>(a[2]||'').localeCompare(b[2]||'') || (a[3]||'').localeCompare(b[3]||''));
+  if(!l.length){ box.innerHTML='<div class="vide-msg">Aucun EFM annoncé pour l\'instant.</div>'; return; }
+  const auj=new Date(); auj.setHours(0,0,0,0);
+  box.innerHTML=`<div class="resume" style="margin-top:12px"><div class="bloc"><b>${l.length}</b><span>EFM annoncés</span></div>
+      <div class="bloc"><b>${l.filter(e=>new Date(e[2]+'T00:00:00')>=auj).length}</b><span>à venir</span></div></div>
+    <div class="cadre-abs" style="margin-top:12px"><table class="efm"><tr><th>Date</th><th>Module et groupe</th><th>Formateur</th><th>Salle</th><th></th></tr>
+    ${l.map(e=>`<tr class="${new Date(e[2]+'T00:00:00')<auj?'passe':''}">
+      <td class="jour">${dateLisible(e[2])}<span class="det">${e[3]||''}</span></td>
+      <td class="mod">${e[1]||''}<span class="det">${e[0]||''}</span></td>
+      <td>${e[5]||''}<span class="det">${e[6]||''}</span></td>
+      <td class="quand">${e[4]==='FAD'?'À distance':e[4]?'Salle '+String(e[4]).replace(/^S0?/,''):'—'}</td>
+      <td><button class="action fantome" style="padding:3px 9px;font-size:11px" data-efmret="${e[6]}" data-rang="${e[7]}">retirer</button></td></tr>`).join('')}
+    </table></div>`;
+  box.querySelectorAll('[data-efmret]').forEach(x=>x.onclick=async()=>{ await retirerEfm(x.dataset.efmret,+x.dataset.rang); efmRecus(); });
+}
 async function rattrapagesRecus(){
   const box=$('zoneRatRecues'); if(!box) return;
   if(!db){ box.innerHTML='<div class="vide-msg">Stockage serveur indisponible.</div>'; return; }
@@ -1955,8 +2064,10 @@ $('admMdp').onkeydown=e=>{ if(e.key==='Enter') $('okAdm').click(); };
     document.querySelectorAll('#vueAdmin .sous-admin').forEach(d=>{ d.hidden = d.dataset.page!==n; });
     document.querySelectorAll('#ongletsAdmin button').forEach(b=>b.classList.toggle('on', b.dataset.sadm===n));
     if(n==='dem') demandesRecues();
+    if(n==='efm') efmRecus();
   }
   document.querySelectorAll('#ongletsAdmin button').forEach(b=>b.onclick=()=>sousAdmin(b.dataset.sadm));
+  $('btnEfmRecus').onclick=efmRecus;
   $('okGest').onclick=async()=>{
     const mat=($('gMat').value||'').trim(), m=($('gMdp').value||'').trim();
     if(!mat) return erreur('errGest','Saisissez votre matricule.');
