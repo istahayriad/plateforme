@@ -26,6 +26,7 @@ header.tete h1{font-family:'Archivo',sans-serif; font-size:18px; font-weight:800
 header.tete p{margin:2px 0 0; font-size:12px; color:var(--encre-doux);}
 button{font-family:inherit; cursor:pointer;}
 .choix{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:26px;}
+.choix-seule{max-width:320px; margin-left:auto; margin-right:auto;}
 .porte{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:26px 22px; text-align:left; font:inherit; color:inherit; box-shadow:var(--ombre);}
 .porte .pict{font-size:34px; line-height:1;}
 .porte h2{font-family:'Archivo',sans-serif; font-size:18px; margin:10px 0 4px;}
@@ -90,10 +91,12 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
   </header>
 
   <!-- ============ ACCUEIL ============ -->
+  <!-- Volontairement UNE seule porte visible : rien ici ne doit laisser deviner
+       qu'un espace responsable existe. L'accès responsable se fait par un lien
+       secret (voir SECRET_DIRECTION plus bas), jamais affiché à l'écran. -->
   <section id="vueAccueil">
-    <div class="choix">
+    <div class="choix choix-seule">
       <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Agent de sécurité</h2><p>Pointer la présence par groupe pendant la tournée.</p></button>
-      <button class="porte" id="porteAdmin"><div class="pict">👤</div><h2>Responsable</h2><p>Voir l'état de présence en temps réel.</p></button>
     </div>
   </section>
 
@@ -244,8 +247,20 @@ function dateLongue(d){
 /* ------------------------- navigation ------------------------- */
 function vue(n){ ['Accueil','Agent','Admin'].forEach(v=>$('vue'+v).hidden=(v!==n)); }
 $('porteAgent').onclick=()=>{ vue('Agent'); ouvrirAgent(); };
-$('porteAdmin').onclick=()=>{ vue('Admin'); ouvrirAdmin(); };
 document.querySelectorAll('[data-retour]').forEach(b=>b.onclick=()=>vue('Accueil'));
+
+/* ------------------------- accès responsable (lien secret) -------------------------
+   Aucun bouton « Responsable » sur la page d'accueil : rien ne doit laisser
+   deviner qu'un espace responsable existe. L'accès se fait uniquement par ce
+   lien, à garder pour vous et à mettre en favori sur votre téléphone/PC :
+       https://istahayriad.github.io/plateforme/pointage.html#direction-ihr
+   Si jamais ce mot doit changer (lien vu par quelqu'un d'autre), changez la
+   valeur ci-dessous ET l'adresse que vous utilisez. */
+const SECRET_DIRECTION='direction-ihr';
+function verifierAccesSecret(){
+  if(location.hash.slice(1)===SECRET_DIRECTION){ vue('Admin'); ouvrirAdmin(); }
+}
+window.addEventListener('hashchange', verifierAccesSecret);
 
 /* ------------------------- AGENT ------------------------- */
 function ouvrirAgent(){
@@ -465,6 +480,7 @@ function rendreSemaine(sessions, pointage){
       ? 'Emplois publiés : '+(META.nbSem||0)+' semaines · '+(META.F||[]).length+' formateurs'
       : 'Aucun emploi publié pour le moment.';
   }catch(e){ $('piedEtat').textContent='Connexion au serveur indisponible.'; }
+  verifierAccesSecret();
 })();
 </script>
 </body></html>
