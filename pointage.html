@@ -153,20 +153,13 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /* ===================================================================
-   « ISTA HAY RIAD — PRÉSENCE STAGIAIRES » (16-17/09/2026)
-   Nom public volontairement tourné vers la présence des stagiaires — c'est
-   ce que l'agent connaît (une feuille par groupe à faire signer) — mais les
-   données réellement enregistrées et exploitées par le responsable sont la
-   présence des FORMATEURS, groupe par groupe.
-   Application indépendante de la plateforme de consultation, mais sur le
-   MÊME projet Firebase (emploi-ista-hay-riad) : elle lit les emplois déjà
-   publiés (pub/meta, pub/s<n>) pour savoir qui doit être où, et écrit dans
-   une collection à elle (pointage/s<n>, indexée par GROUPE) pour ne jamais
-   toucher aux données de la plateforme de consultation.
-   Deux portes : Agent de sécurité (code à 4 chiffres, très gros boutons, une
-   ligne par groupe pendant la tournée) et Responsable (compte Firebase du
-   planning, état en temps réel du jour et de la semaine, par groupe et par
-   formateur). =================== */
+   ISTA HAY RIAD — application indépendante de la plateforme de consultation,
+   mais sur le MÊME projet Firebase (emploi-ista-hay-riad) : elle lit les
+   emplois déjà publiés (pub/meta, pub/s<n>) et écrit dans une collection à
+   elle (pointage/s<n>, indexée par groupe).
+   Accès agent : code à 4 chiffres, une ligne par groupe pendant la tournée.
+   Accès responsable : compte Firebase du planning, état en temps réel du
+   jour et de la semaine. =================== */
 const $=id=>document.getElementById(id);
 const FIREBASE_CONFIG={
   apiKey: "AIzaSyCgVQtJdrsIsS2bvpkqZSMH7pPJGm_IlO8",
@@ -315,11 +308,8 @@ async function demarrerTournee(){
   });
   afficherFormateursDuCreneau();
 }
-/* Une ligne par GROUPE (une feuille de présence stagiaires = un groupe),
-   pas par séance : un regroupement FAD à plusieurs groupes donne donc
-   plusieurs lignes, une par groupe, avec le même formateur. C'est ainsi que
-   l'agent travaille physiquement — et c'est par groupe que le responsable
-   récupère ensuite l'état de présence des formateurs. */
+/* Une ligne par groupe, pas par séance : un regroupement FAD à plusieurs
+   groupes donne donc plusieurs lignes, une par groupe. */
 async function afficherFormateursDuCreneau(){
   const box=$('listeFormateurs');
   box.innerHTML='<p class="videMsg">Chargement…</p>';
