@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
-<title>Pointage ISTA Hay Riad</title>
+<title>ISTA Hay Riad — Présence stagiaires</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
 :root{
@@ -84,7 +84,7 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 <div class="enveloppe">
   <header class="tete">
     <div class="txt">
-      <h1>ISTA Hay Riad — Pointage des formateurs</h1>
+      <h1>ISTA Hay Riad — Présence stagiaires</h1>
       <p id="piedEtat">Chargement…</p>
     </div>
   </header>
@@ -92,7 +92,7 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
   <!-- ============ ACCUEIL ============ -->
   <section id="vueAccueil">
     <div class="choix">
-      <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Agent de sécurité</h2><p>Pointer les formateurs pendant la tournée.</p></button>
+      <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Agent de sécurité</h2><p>Pointer la présence par groupe pendant la tournée.</p></button>
       <button class="porte" id="porteAdmin"><div class="pict">👤</div><h2>Responsable</h2><p>Voir l'état de présence en temps réel.</p></button>
     </div>
   </section>
@@ -150,15 +150,20 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /* ===================================================================
-   POINTAGE DES FORMATEURS — ISTA HAY RIAD (16/09/2026)
+   « ISTA HAY RIAD — PRÉSENCE STAGIAIRES » (16-17/09/2026)
+   Nom public volontairement tourné vers la présence des stagiaires — c'est
+   ce que l'agent connaît (une feuille par groupe à faire signer) — mais les
+   données réellement enregistrées et exploitées par le responsable sont la
+   présence des FORMATEURS, groupe par groupe.
    Application indépendante de la plateforme de consultation, mais sur le
    MÊME projet Firebase (emploi-ista-hay-riad) : elle lit les emplois déjà
    publiés (pub/meta, pub/s<n>) pour savoir qui doit être où, et écrit dans
-   une collection à elle (pointage/s<n>) pour ne jamais toucher aux données
-   de la plateforme de consultation.
-   Deux portes : Agent de sécurité (code à 4 chiffres, très gros boutons,
-   aucune lecture complexe) et Responsable (compte Firebase du planning,
-   état en temps réel du jour et de la semaine). =================== */
+   une collection à elle (pointage/s<n>, indexée par GROUPE) pour ne jamais
+   toucher aux données de la plateforme de consultation.
+   Deux portes : Agent de sécurité (code à 4 chiffres, très gros boutons, une
+   ligne par groupe pendant la tournée) et Responsable (compte Firebase du
+   planning, état en temps réel du jour et de la semaine, par groupe et par
+   formateur). =================== */
 const $=id=>document.getElementById(id);
 const FIREBASE_CONFIG={
   apiKey: "AIzaSyCgVQtJdrsIsS2bvpkqZSMH7pPJGm_IlO8",
@@ -295,43 +300,53 @@ async function demarrerTournee(){
   });
   afficherFormateursDuCreneau();
 }
+/* Une ligne par GROUPE (une feuille de présence stagiaires = un groupe),
+   pas par séance : un regroupement FAD à plusieurs groupes donne donc
+   plusieurs lignes, une par groupe, avec le même formateur. C'est ainsi que
+   l'agent travaille physiquement — et c'est par groupe que le responsable
+   récupère ensuite l'état de présence des formateurs. */
 async function afficherFormateursDuCreneau(){
   const box=$('listeFormateurs');
   box.innerHTML='<p class="videMsg">Chargement…</p>';
   const sessions=await chargerSemaine(AGENT_SW);
   const ici=sessions.filter(s=>s[1]===AGENT_JOUR && s[2]===AGENT_CRENEAU);
-  if(!ici.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
+  const parGroupe=[];
+  ici.forEach(s=>{
+    const fi=s[0], type=s[3], salleI=s[4], groupesI=s[6]||[];
+    groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
+  });
+  if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
+  parGroupe.sort((a,b)=>((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   const marques=(pointage[cle]) || {};
-  const lignes=ici.map((s,idx)=>{
-    const fi=s[0], type=s[3], salleI=s[4], modI=s[5], groupesI=s[6]||[];
-    const nom=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
-    const groupe=groupesI.map(gi=>(META.G[gi]||[])[0]).filter(Boolean).join(', ');
+  const lignes=parGroupe.map(({gi,fi,type,salleI})=>{
+    const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
+    const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
     const salle=type===1 ? 'à distance' : (META.S[salleI] ? 'salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'salle à affecter');
-    const etat=marques[fi] ? marques[fi].etat : null;
-    return `<div class="ligneF" data-fi="${fi}">
-      <div class="nom">${nom}</div>
-      <div class="det">${groupe||'—'} · ${salle}</div>
+    const etat=marques[gi] ? marques[gi].etat : null;
+    return `<div class="ligneF" data-gi="${gi}">
+      <div class="nom">${nomGroupe}</div>
+      <div class="det">Formateur : ${nomF} · ${salle}</div>
       <div class="boutons">
-        <button class="bp ${etat==='present'?'on':''}" data-fi="${fi}" data-etat="present">✓ Présent</button>
-        <button class="ba ${etat==='absent'?'on':''}" data-fi="${fi}" data-etat="absent">✗ Absent</button>
+        <button class="bp ${etat==='present'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="present">✓ Présent</button>
+        <button class="ba ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="absent">✗ Absent</button>
       </div>
     </div>`;
   }).join('');
   box.innerHTML=lignes;
-  const nMarques=ici.filter(s=>marques[s[0]]).length;
-  box.insertAdjacentHTML('afterbegin', `<div class="compteur">${nMarques} / ${ici.length} pointés</div>`);
+  const nMarques=parGroupe.filter(({gi})=>marques[gi]).length;
+  box.insertAdjacentHTML('afterbegin', `<div class="compteur">${nMarques} / ${parGroupe.length} pointés</div>`);
   box.querySelectorAll('button[data-etat]').forEach(btn=>{
     btn.onclick=async()=>{
-      const fi=+btn.dataset.fi, etat=btn.dataset.etat;
+      const gi=+btn.dataset.gi, fi=+btn.dataset.fi, etat=btn.dataset.etat;
       const ligne=btn.closest('.ligneF');
       ligne.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
       btn.classList.add('on');
       try{
         const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
         if(!p[cle]) p[cle]={};
-        p[cle][fi]={etat, heure:new Date().toISOString()};
+        p[cle][gi]={etat, heure:new Date().toISOString(), fi};
         await ecrireDoc('pointage/s'+AGENT_SW, p);
         afficherFormateursDuCreneau();   // recompte le compteur
       }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
@@ -377,47 +392,57 @@ async function demarrerAdmin(){
     rendreSemaine(sessions, pointage);
   }, err=>{ console.error(err); $('admJour').innerHTML='<p class="erreur">Lecture impossible : '+err.message+'</p>'; });
 }
+/* Aplatit les séances en une ligne par groupe (comme côté agent), puis lit
+   l'état de présence du formateur à partir de sa/ses ligne(s) groupe. */
+function lignesParGroupe(sessions){
+  const l=[];
+  sessions.forEach(s=>{
+    const fi=s[0], jour=s[1], creneau=s[2], groupesI=s[6]||[];
+    groupesI.forEach(gi=>l.push({fi, jour, creneau, gi}));
+  });
+  return l;
+}
 function rendreJour(sessions, jour, pointage){
   const auj=new Date();
-  const ici=sessions.filter(s=>s[1]===jour).sort((a,b)=>a[2]-b[2] || a[0]-b[0]);
-  const nPresent=ici.filter(s=>{ const c=pointage[jour+'_'+s[2]]; return c && c[s[0]] && c[s[0]].etat==='present'; }).length;
-  const nAbsent=ici.filter(s=>{ const c=pointage[jour+'_'+s[2]]; return c && c[s[0]] && c[s[0]].etat==='absent'; }).length;
+  const ici=lignesParGroupe(sessions).filter(l=>l.jour===jour).sort((a,b)=>a.creneau-b.creneau || ((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
+  const marqueDe=l=>{ const c=pointage[l.jour+'_'+l.creneau]; return c && c[l.gi]; };
+  const nPresent=ici.filter(l=>{ const m=marqueDe(l); return m && m.etat==='present'; }).length;
+  const nAbsent=ici.filter(l=>{ const m=marqueDe(l); return m && m.etat==='absent'; }).length;
   const nAttente=ici.length-nPresent-nAbsent;
   let html=`<p class="note" style="margin-bottom:10px">${dateLongue(auj)} — mis à jour en direct.</p>
     <div class="resume">
-      <div class="bloc"><b>${ici.length}</b><span>séances prévues</span></div>
+      <div class="bloc"><b>${ici.length}</b><span>groupes prévus</span></div>
       <div class="bloc" style="color:var(--vert)"><b>${nPresent}</b><span>présents</span></div>
       <div class="bloc" style="color:var(--rouge)"><b>${nAbsent}</b><span>absents</span></div>
       <div class="bloc"><b>${nAttente}</b><span>en attente</span></div>
     </div>`;
   if(!ici.length){ html+='<p class="videMsg">Aucun cours aujourd\'hui.</p>'; $('admJour').innerHTML=html; return; }
-  html+=`<div class="cadre-scroll"><table class="pointage"><tr><th>Créneau</th><th>Formateur</th><th>Groupe</th><th>État</th><th>Heure</th></tr>`;
-  ici.forEach(s=>{
-    const fi=s[0], c=pointage[jour+'_'+s[2]], marque=c && c[fi];
-    const nom=META.nomAff[fi]||META.F[fi]||'—';
-    const groupe=(s[6]||[]).map(gi=>(META.G[gi]||[])[0]).filter(Boolean).join(', ');
+  html+=`<div class="cadre-scroll"><table class="pointage"><tr><th>Créneau</th><th>Groupe</th><th>Formateur</th><th>État</th><th>Heure</th></tr>`;
+  ici.forEach(l=>{
+    const marque=marqueDe(l);
+    const nom=META.nomAff[l.fi]||META.F[l.fi]||'—';
+    const groupe=(META.G[l.gi]||[])[0]||'—';
     const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
       : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
       : '<span class="etat absent">✗ absent</span>';
     const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    html+=`<tr><td>${CRENEAUX[s[2]]}</td><td>${nom}</td><td>${groupe||'—'}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
+    html+=`<tr><td>${CRENEAUX[l.creneau]}</td><td>${groupe}</td><td>${nom}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
   });
   html+='</table></div>';
   $('admJour').innerHTML=html;
 }
 function rendreSemaine(sessions, pointage){
   const parF={};
-  sessions.forEach(s=>{
-    const fi=s[0];
-    const o=parF[fi]||(parF[fi]={prevu:0, present:0, absent:0});
+  lignesParGroupe(sessions).forEach(l=>{
+    const o=parF[l.fi]||(parF[l.fi]={prevu:0, present:0, absent:0});
     o.prevu++;
-    const c=pointage[s[1]+'_'+s[2]], m=c && c[fi];
+    const c=pointage[l.jour+'_'+l.creneau], m=c && c[l.gi];
     if(m && m.etat==='present') o.present++;
     else if(m && m.etat==='absent') o.absent++;
   });
   const lignes=Object.keys(parF).map(Number).sort((a,b)=>(META.nomAff[a]||'').localeCompare(META.nomAff[b]||''));
   if(!lignes.length){ $('admSemaine').innerHTML='<p class="videMsg">Aucun emploi cette semaine.</p>'; return; }
-  let html=`<div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Séances prévues</th><th>Présent</th><th>Absent</th><th>En attente</th><th>Taux</th></tr>`;
+  let html=`<div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Groupes prévus</th><th>Présent</th><th>Absent</th><th>En attente</th><th>Taux</th></tr>`;
   lignes.forEach(fi=>{
     const o=parF[fi];
     const attente=o.prevu-o.present-o.absent;
