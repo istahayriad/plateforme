@@ -565,6 +565,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
           <div class="rangee" style="margin-top:4px">
             <button class="action fantome" id="btnReset">Effacer les données publiées</button>
           </div>
+          <p class="note" style="margin-top:6px">Efface aussi les demandes des formateurs (attestations, rattrapages, EFM annoncés).</p>
         </fieldset>
       </div>
 
@@ -1899,7 +1900,14 @@ function initAdmin(){
       const cles=['pub/meta','pub/formateurs','pub/stagiaires','pub/gestionnaires','pub/efm','pub/abs'];
       for(let i=0;i<60;i++) cles.push('pub/s'+i);
       for(const c of cles){ try{ await db.doc(c).delete(); n++; }catch(e){} }
-      try{ const r=await db.collection('abs').get(); for(const x of r.docs){ await db.doc('abs/'+x.id).delete(); n++; } }catch(e){}
+      /* les demandes des formateurs (attestations, rattrapages, EFM annoncés)
+         vivent dans des collections à part (une fiche par matricule) : elles
+         ne sont pas touchées par la suppression de pub/* ci-dessus, mais
+         « effacer les données publiées » doit aussi les vider. */
+      for(const coll of ['abs','dem','rat','efm']){
+        try{ const r=await db.collection(coll).get();
+             for(const x of r.docs){ await db.doc(coll+'/'+x.id).delete(); n++; } }catch(e){}
+      }
     }
     tampon={emplois:null, formateurs:null, stagiaires:null, efm:null, abs:null};
     ['etatEmplois','etatListes','etatEfm','etatAbs'].forEach(id=>{
