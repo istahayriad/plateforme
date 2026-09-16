@@ -502,13 +502,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
             <div class="etat" id="etatListes"></div>
           </fieldset>
           <!-- Depuis le 16/09 les EFM sont annoncés par les formateurs eux-mêmes
-               (sous-page « Dates EFM ») : le dépôt du classeur est masqué,
-               conservé pour les identifiants utilisés par le code. -->
-          <fieldset hidden>
-            <legend>3 · Dates des EFM</legend>
-            <input type="file" id="fEfm" accept=".xlsx,.xlsm,.csv">
-            <div class="etat" id="etatEfm"></div>
-          </fieldset>
+               (sous-page « Dates EFM ») : plus de classeur à déposer. -->
         </div>
         <p class="note" style="margin-top:14px">Ce qui n'est pas redéposé est conservé tel qu'il est publié : vous pouvez publier les emplois seuls, les listes seules…</p>
       </div>
@@ -583,6 +577,9 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
 
   <footer class="bas">
     <span id="piedMaj"></span>
+    <!-- repère de version : permet de vérifier d'un coup d'œil que le site
+         public affiche bien le dernier fichier déposé sur GitHub -->
+    <span style="opacity:.55;margin-left:10px">· version 16/09 v3</span>
     <button id="lienAdmin">Espace administrateur</button>
   </footer>
 </div>
@@ -1760,7 +1757,9 @@ function dateIso(v){
   return s;
 }
 function initAdmin(){
-  $('fEfm').onchange=e=>{
+  /* dépôt du classeur EFM retiré de la page le 16/09 ; le branchement reste
+     inoffensif si le champ n'existe pas */
+  if($('fEfm')) $('fEfm').onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
     const r=new FileReader();
     r.onload=ev=>{
