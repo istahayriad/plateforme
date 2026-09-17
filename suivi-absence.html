@@ -378,7 +378,7 @@ async function afficherSalles(){
   const tuileFad = lgFad ? (()=>{ const complet=nPointees(lgFad)===lgFad.length;
       return `<button class="tuileSalle fad ${complet?'faite':''}" data-salle="FAD"><span class="num">FAD</span></button>`; })() : '';
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
-  box.innerHTML = `<div class="compteur">${totalPointees} / ${total} pointés</div>
+  box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
     <div class="grilleSalles">${tuiles}${tuileFad}</div>`;
   box.querySelectorAll('.tuileSalle[data-salle]').forEach(btn=>{
     btn.onclick=()=>{ AGENT_SALLE = btn.dataset.salle==='FAD' ? 'FAD' : +btn.dataset.salle; AGENT_ATTENTE={}; afficherSalleDetail(); };
