@@ -113,6 +113,10 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 .resume .bloc{background:var(--carte); border:1px solid var(--ligne); border-radius:12px; padding:12px; text-align:center; box-shadow:var(--ombre);}
 .resume .bloc b{display:block; font-family:'Archivo',sans-serif; font-size:22px;}
 .resume .bloc span{font-size:11px; color:var(--encre-doux);}
+/* Les 4 blocs du résumé responsable servent de bouton (demande du 18/09/2026) :
+   un clic affiche la liste filtrée, un second sur le même bloc la referme. */
+.resume .bloc.clic{cursor:pointer; user-select:none;}
+.resume .bloc.clic.sel{border-color:var(--bleu); border-width:2px; background:var(--bleu-doux);}
 .note{font-size:12.5px; color:var(--encre-doux);}
 [hidden]{display:none!important;}
 </style>
@@ -487,14 +491,14 @@ $('btnDeconnexionAdmin').onclick=async()=>{ try{ await fbAuth.signOut(); }catch(
 /* ADMIN_JOUR : 0-5 (jour) ou 'semaine' (synthèse). ADMIN_CRENEAU : null tant
    qu'aucun des 4 boutons n'a été touché — aucune liste de formateurs ne
    s'affiche avant ça (demande du 18/09/2026). */
-let ADMIN_SEM=0, ADMIN_JOUR=0, ADMIN_CRENEAU=null, ADMIN_UNSUB=null;
+let ADMIN_SEM=0, ADMIN_JOUR=0, ADMIN_CRENEAU=null, ADMIN_FILTRE=null, ADMIN_UNSUB=null;
 async function demarrerAdmin(){
   await ouvrirFirebase();
   if(!META) await chargerMeta();
   const info=semaineEtJourDuJour();
   ADMIN_SEM = info ? info.w : 0;
   ADMIN_JOUR = info ? info.jour : 0;
-  ADMIN_CRENEAU=null;
+  ADMIN_CRENEAU=null; ADMIN_FILTRE=null;
   renderNavAdmin();
   await chargerVueAdmin();
 }
@@ -507,7 +511,7 @@ function renderNavAdmin(){
   semBox.innerHTML=Array.from({length:nSem},(_,w)=>
     `<button class="${w===ADMIN_SEM?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
   semBox.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
-    ADMIN_SEM=+b.dataset.w; ADMIN_CRENEAU=null; renderNavAdmin(); await chargerVueAdmin();
+    ADMIN_SEM=+b.dataset.w; ADMIN_CRENEAU=null; ADMIN_FILTRE=null; renderNavAdmin(); await chargerVueAdmin();
   });
   /* Les 6 jours, puis une 7e puce « Synthèse semaine » juste après Samedi. */
   const jourBox=$('admJours');
@@ -516,7 +520,7 @@ function renderNavAdmin(){
     +`<button class="${ADMIN_JOUR==='semaine'?'on':''}" data-j="semaine">📊 Synthèse semaine</button>`;
   jourBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
     ADMIN_JOUR = b.dataset.j==='semaine' ? 'semaine' : +b.dataset.j;
-    ADMIN_CRENEAU=null;
+    ADMIN_CRENEAU=null; ADMIN_FILTRE=null;
     renderNavAdmin(); rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
   });
   /* 4 boutons créneaux, seulement en vue « jour » — rien à choisir en
@@ -527,7 +531,7 @@ function renderNavAdmin(){
     crBox.innerHTML=CRENEAUX.map((c,i)=>
       `<button class="${i===ADMIN_CRENEAU?'on':''}" data-c="${i}">${i+1}ᵉ créneau</button>`).join('');
     crBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-      ADMIN_CRENEAU=+b.dataset.c; renderNavAdmin(); rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
+      ADMIN_CRENEAU=+b.dataset.c; ADMIN_FILTRE=null; renderNavAdmin(); rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
     });
   }
 }
@@ -559,35 +563,55 @@ function rendreDetailAdmin(sessions, pointage){
   const box=$('admDetail');
   if(ADMIN_JOUR==='semaine'){ box.innerHTML=syntheseSemaineHtml(sessions, pointage); return; }
   const ici=lignesParGroupe(sessions).filter(l=>l.jour===ADMIN_JOUR);
-  const nPresent=ici.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='present'; }).length;
-  const nAbsent=ici.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='absent'; }).length;
-  const nAttente=ici.length-nPresent-nAbsent;
+  if(!ici.length){ box.innerHTML='<p class="videMsg">Aucun cours en salle ce jour.</p>'; return; }
+  if(ADMIN_CRENEAU==null){ box.innerHTML='<p class="videMsg">Choisissez un créneau ci-dessus pour voir le détail.</p>'; return; }
+  const dc=ici.filter(l=>l.creneau===ADMIN_CRENEAU);
+  if(!dc.length){ box.innerHTML='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; return; }
+  /* Les 4 blocs du résumé SONT les boutons qui affichent la liste (demande
+     du 18/09/2026) : un premier clic filtre et affiche, un second sur le
+     même bloc referme la liste. Compteurs à l'échelle du créneau choisi,
+     pas de toute la journée — pour rester cohérents avec la liste qu'ils
+     ouvrent. */
+  const parEtat={
+    tous: dc,
+    present: dc.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='present'; }),
+    absent: dc.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='absent'; }),
+    attente: dc.filter(l=>!marqueDe(pointage,l))
+  };
   let html=`<div class="resume">
-      <div class="bloc"><b>${ici.length}</b><span>groupes prévus</span></div>
-      <div class="bloc" style="color:var(--vert)"><b>${nPresent}</b><span>présents</span></div>
-      <div class="bloc" style="color:var(--rouge)"><b>${nAbsent}</b><span>absents</span></div>
-      <div class="bloc"><b>${nAttente}</b><span>en attente</span></div>
+      <div class="bloc clic ${ADMIN_FILTRE==='tous'?'sel':''}" data-filtre="tous"><b>${parEtat.tous.length}</b><span>groupes prévus</span></div>
+      <div class="bloc clic ${ADMIN_FILTRE==='present'?'sel':''}" data-filtre="present" style="color:var(--vert)"><b>${parEtat.present.length}</b><span>présents</span></div>
+      <div class="bloc clic ${ADMIN_FILTRE==='absent'?'sel':''}" data-filtre="absent" style="color:var(--rouge)"><b>${parEtat.absent.length}</b><span>absents</span></div>
+      <div class="bloc clic ${ADMIN_FILTRE==='attente'?'sel':''}" data-filtre="attente"><b>${parEtat.attente.length}</b><span>en attente</span></div>
     </div>`;
-  if(!ici.length){ html+='<p class="videMsg">Aucun cours en salle ce jour.</p>'; box.innerHTML=html; return; }
-  if(ADMIN_CRENEAU==null){ html+='<p class="videMsg">Choisissez un créneau ci-dessus pour voir le détail.</p>'; box.innerHTML=html; return; }
-  const dc=ici.filter(l=>l.creneau===ADMIN_CRENEAU)
-    .sort((a,b)=>(META.nomAff[a.fi]||META.F[a.fi]||'').localeCompare(META.nomAff[b.fi]||META.F[b.fi]||''));
-  if(!dc.length){ html+='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; box.innerHTML=html; return; }
-  html+=`<div class="blocCreneau"><h4>${CRENEAUX[ADMIN_CRENEAU]}</h4>
-    <div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Groupe</th><th>Salle</th><th>État</th><th>Heure</th></tr>`;
-  dc.forEach(l=>{
-    const marque=marqueDe(pointage,l);
-    const nom=META.nomAff[l.fi]||META.F[l.fi]||'—';
-    const groupe=(META.G[l.gi]||[])[0]||'—';
-    const salle=META.S[l.salleI] ? 'Salle '+String(META.S[l.salleI]).replace(/^S0?/,'') : '—';
-    const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
-      : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
-      : '<span class="etat absent">✗ absent</span>';
-    const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    html+=`<tr><td>${nom}</td><td>${groupe}</td><td>${salle}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
-  });
-  html+='</table></div></div>';
+  if(ADMIN_FILTRE){
+    const liste=[...parEtat[ADMIN_FILTRE]].sort((a,b)=>(META.nomAff[a.fi]||META.F[a.fi]||'').localeCompare(META.nomAff[b.fi]||META.F[b.fi]||''));
+    html+=`<div class="blocCreneau"><h4>${CRENEAUX[ADMIN_CRENEAU]}</h4>`;
+    if(!liste.length){ html+='<p class="videMsg">Aucun groupe dans cette catégorie.</p></div>'; }
+    else {
+      html+=`<div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Groupe</th><th>Salle</th><th>État</th><th>Heure</th></tr>`;
+      liste.forEach(l=>{
+        const marque=marqueDe(pointage,l);
+        const nom=META.nomAff[l.fi]||META.F[l.fi]||'—';
+        const groupe=(META.G[l.gi]||[])[0]||'—';
+        const salle=META.S[l.salleI] ? 'Salle '+String(META.S[l.salleI]).replace(/^S0?/,'') : '—';
+        const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
+          : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
+          : '<span class="etat absent">✗ absent</span>';
+        const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
+        html+=`<tr><td>${nom}</td><td>${groupe}</td><td>${salle}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
+      });
+      html+='</table></div></div>';
+    }
+  }
   box.innerHTML=html;
+  box.querySelectorAll('.bloc.clic').forEach(b=>{
+    b.onclick=()=>{
+      const f=b.dataset.filtre;
+      ADMIN_FILTRE = (ADMIN_FILTRE===f) ? null : f;
+      rendreDetailAdmin(sessions, pointage);
+    };
+  });
 }
 /* Synthèse de la semaine entière, par formateur, ordre alphabétique. */
 function syntheseSemaineHtml(sessions, pointage){
