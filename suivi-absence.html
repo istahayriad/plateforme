@@ -58,14 +58,11 @@ button{font-family:inherit; cursor:pointer;}
 .voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
 .grille25{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:6px;}
 .grilleSalles{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:6px;}
-.tuileSalle{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:16px 4px;
-  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:76px;}
+.tuileSalle{display:flex; align-items:center; justify-content:center; padding:20px 4px;
+  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px;}
 .tuileSalle .num{font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; color:var(--encre);}
-.tuileSalle .lab{font-size:10.5px; color:var(--encre-doux); text-align:center;}
-.tuileSalle.vide{opacity:.35; box-shadow:none;}
-.tuileSalle.vide .num{color:var(--encre-doux);}
-.tuileSalle.faite{border-color:var(--vert); background:var(--vert-doux);}
-.tuileSalle.faite .num, .tuileSalle.faite .lab{color:var(--vert);}
+.tuileSalle.faite{border-color:var(--vert); background:var(--vert);}
+.tuileSalle.faite .num{color:#fff;}
 .tuileSalle.fad{border-style:dashed;}
 .pairVA{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
 .pairVA .valider{padding:18px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:17px; font-weight:800; box-shadow:var(--ombre);}
@@ -370,14 +367,16 @@ async function afficherSalles(){
   /* Se référer à l'emploi : seules les salles avec un groupe réellement
      affecté à ce créneau apparaissent — plus de tuiles vides/grisées
      (demande du 17/09/2026). */
+  /* Tuile blanche par défaut, verte une fois la salle entièrement validée —
+     plus aucun texte sous le numéro (demande du 17/09/2026). */
   const tuiles=Array.from({length:30},(_,i)=>i+1).filter(n=>parSalle[n]).map(n=>{
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
-    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span><span class="lab">${complet?'✓ pointée':lg.length+' cours'}</span></button>`;
+    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span></button>`;
   }).join('');
   const lgFad=parSalle['FAD'];
   const tuileFad = lgFad ? (()=>{ const complet=nPointees(lgFad)===lgFad.length;
-      return `<button class="tuileSalle fad ${complet?'faite':''}" data-salle="FAD"><span class="num">FAD</span><span class="lab">${complet?'✓ pointée':lgFad.length+' cours'}</span></button>`; })() : '';
+      return `<button class="tuileSalle fad ${complet?'faite':''}" data-salle="FAD"><span class="num">FAD</span></button>`; })() : '';
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} pointés</div>
     <div class="grilleSalles">${tuiles}${tuileFad}</div>`;
@@ -435,7 +434,7 @@ function rendreSalleDetail(){
   box.querySelectorAll('button.collectif').forEach(btn=>{
     btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'absent', nb:null, fi:+btn.dataset.fi}; rendreSalleDetail(); };
   });
-  $('btnAnnulerSalle').onclick=()=>{ AGENT_ATTENTE={}; rendreSalleDetail(); };
+  $('btnAnnulerSalle').onclick=()=>{ AGENT_ATTENTE={}; AGENT_SALLE=null; afficherSalles(); };
   $('btnValiderSalle').onclick=async()=>{
     if(!Object.keys(AGENT_ATTENTE).length){ AGENT_SALLE=null; afficherSalles(); return; }
     try{
