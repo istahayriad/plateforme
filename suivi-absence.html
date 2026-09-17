@@ -358,13 +358,17 @@ async function afficherSalles(){
   box.innerHTML='<p class="videMsg">Chargement…</p>';
   const sessions=await chargerSemaine(AGENT_SW);
   const ici=sessions.filter(s=>s[1]===AGENT_JOUR && s[2]===AGENT_CRENEAU);
+  /* Séances FAD éliminées (demande du 18/09/2026) : l'agent fait une
+     tournée physique, il n'y a rien à constater pour un cours à distance —
+     seules les séances en salle réelle sont retenues. */
   const parGroupe=[];
   ici.forEach(s=>{
     const fi=s[0], type=s[3], salleI=s[4], groupesI=s[6]||[];
+    if(type===1) return;
     groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
   });
   AGENT_PAR_GROUPE=parGroupe;
-  if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
+  if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; return; }
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   const marques=(pointage[cle]) || {};
@@ -373,22 +377,18 @@ async function afficherSalles(){
   const nPointees=lg=>lg.filter(l=>marques[l.gi]).length;
   /* Se référer à l'emploi : seules les salles avec un groupe réellement
      affecté à ce créneau apparaissent — plus de tuiles vides/grisées
-     (demande du 17/09/2026). */
-  /* Tuile blanche par défaut, verte une fois la salle entièrement validée —
-     plus aucun texte sous le numéro (demande du 17/09/2026). */
+     (demande du 17/09/2026). Tuile blanche par défaut, verte une fois la
+     salle entièrement validée — plus aucun texte sous le numéro. */
   const tuiles=Array.from({length:30},(_,i)=>i+1).filter(n=>parSalle[n]).map(n=>{
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
     return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span></button>`;
   }).join('');
-  const lgFad=parSalle['FAD'];
-  const tuileFad = lgFad ? (()=>{ const complet=nPointees(lgFad)===lgFad.length;
-      return `<button class="tuileSalle fad ${complet?'faite':''}" data-salle="FAD"><span class="num">FAD</span></button>`; })() : '';
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
-    <div class="grilleSalles">${tuiles}${tuileFad}</div>`;
+    <div class="grilleSalles">${tuiles}</div>`;
   box.querySelectorAll('.tuileSalle[data-salle]').forEach(btn=>{
-    btn.onclick=()=>{ AGENT_SALLE = btn.dataset.salle==='FAD' ? 'FAD' : +btn.dataset.salle; AGENT_ATTENTE={}; afficherSalleDetail(); };
+    btn.onclick=()=>{ AGENT_SALLE = +btn.dataset.salle; AGENT_ATTENTE={}; afficherSalleDetail(); };
   });
 }
 /* ÉCRAN 2 : détail d'une salle — une carte par groupe qui s'y trouve à ce
@@ -500,7 +500,8 @@ async function demarrerAdmin(){
 function lignesParGroupe(sessions){
   const l=[];
   sessions.forEach(s=>{
-    const fi=s[0], jour=s[1], creneau=s[2], groupesI=s[6]||[];
+    const fi=s[0], jour=s[1], creneau=s[2], type=s[3], groupesI=s[6]||[];
+    if(type===1) return;   // FAD éliminée : l'agent ne pointe rien à distance
     groupesI.forEach(gi=>l.push({fi, jour, creneau, gi}));
   });
   return l;
