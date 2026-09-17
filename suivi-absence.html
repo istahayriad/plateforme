@@ -57,6 +57,19 @@ button{font-family:inherit; cursor:pointer;}
 .ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
 .voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
 .grille25{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:6px;}
+.grilleSalles{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:6px;}
+.tuileSalle{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:16px 4px;
+  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:76px;}
+.tuileSalle .num{font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; color:var(--encre);}
+.tuileSalle .lab{font-size:10.5px; color:var(--encre-doux); text-align:center;}
+.tuileSalle.vide{opacity:.35; box-shadow:none;}
+.tuileSalle.vide .num{color:var(--encre-doux);}
+.tuileSalle.faite{border-color:var(--vert); background:var(--vert-doux);}
+.tuileSalle.faite .num, .tuileSalle.faite .lab{color:var(--vert);}
+.tuileSalle.fad{border-style:dashed;}
+.pairVA{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
+.pairVA .valider{padding:18px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:17px; font-weight:800; box-shadow:var(--ombre);}
+.pairVA .annuler{padding:18px 6px; border-radius:14px; border:2px solid var(--ligne); background:var(--carte); color:var(--encre-doux); font-size:17px; font-weight:800;}
 .grille25 .nb{padding:12px 0; border-radius:9px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre);}
 .grille25 .nb.on{border-color:var(--vert); background:var(--vert); color:#fff;}
 .collectif{width:100%; margin-top:12px; padding:15px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre-doux);}
@@ -293,6 +306,10 @@ PC.forEach((inp,i)=>{
 $('btnDeconnexionAgent').onclick=()=>{ try{ localStorage.removeItem('pointageCodeAgent'); }catch(e){} vue('Accueil'); };
 
 let AGENT_SW=null, AGENT_JOUR=null, AGENT_CRENEAU=-1;
+let AGENT_PAR_GROUPE=[];      // toutes les lignes (groupe, créneau) du jour choisi
+let AGENT_SALLE=null;         // salle actuellement ouverte : 1-30, ou 'FAD'
+let AGENT_ATTENTE={};         // choix pas encore validés sur l'écran salle, par groupe
+let AGENT_SALLE_MARQUES={};   // pointage déjà enregistré pour la salle ouverte
 async function demarrerTournee(){
   $('ecranTournee').hidden=false;
   $('listeFormateurs').innerHTML='<p class="videMsg">Chargement…</p>';
@@ -315,13 +332,24 @@ async function demarrerTournee(){
   $('boutonsCreneaux').querySelectorAll('button').forEach(b=>b.onclick=()=>{
     AGENT_CRENEAU=+b.dataset.cr;
     $('boutonsCreneaux').querySelectorAll('button').forEach(x=>x.classList.toggle('actuel', x===b));
-    afficherFormateursDuCreneau();
+    AGENT_SALLE=null; AGENT_ATTENTE={};
+    afficherSalles();
   });
-  afficherFormateursDuCreneau();
+  AGENT_SALLE=null; AGENT_ATTENTE={};
+  afficherSalles();
 }
-/* Une ligne par groupe, pas par séance : un regroupement FAD à plusieurs
-   groupes donne donc plusieurs lignes, une par groupe. */
-async function afficherFormateursDuCreneau(){
+/* Numéro de salle utilisé comme clé d'écran : 1 à 30, ou 'FAD' pour le
+   distanciel (pas de salle physique). */
+function clefSalle({type,salleI}){
+  if(type===1) return 'FAD';
+  const m=String(META.S[salleI]||'').match(/\d+/);
+  return m ? +m[0] : 'AUTRE';
+}
+/* ÉCRAN 1 : la tournée par salle (demande du 17/09/2026) — l'agent voit les
+   30 salles d'un coup d'œil, avec un repère pour celles déjà pointées, et
+   touche celle où il se trouve physiquement plutôt que de faire défiler une
+   longue liste de groupes triés. */
+async function afficherSalles(){
   const box=$('listeFormateurs');
   box.innerHTML='<p class="videMsg">Chargement…</p>';
   const sessions=await chargerSemaine(AGENT_SW);
@@ -331,39 +359,61 @@ async function afficherFormateursDuCreneau(){
     const fi=s[0], type=s[3], salleI=s[4], groupesI=s[6]||[];
     groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
   });
+  AGENT_PAR_GROUPE=parGroupe;
   if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
-  /* Tri par numéro de salle (1 à 30), pas par nom de groupe : l'agent
-     traverse le campus salle par salle pendant sa tournée physique — le
-     distanciel (sans salle réelle) passe en dernier (demande du 17/09/2026). */
-  const numSalle=({type,salleI})=>{
-    if(type===1) return 999;
-    const m=String(META.S[salleI]||'').match(/\d+/);
-    return m ? +m[0] : 998;
-  };
-  parGroupe.sort((a,b)=> numSalle(a)-numSalle(b) || ((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   const marques=(pointage[cle]) || {};
-  const lignes=parGroupe.map(({gi,fi,type,salleI})=>{
+  const parSalle={};
+  parGroupe.forEach(l=>{ const k=clefSalle(l); (parSalle[k]=parSalle[k]||[]).push(l); });
+  const nPointees=lg=>lg.filter(l=>marques[l.gi]).length;
+  /* Se référer à l'emploi : seules les salles avec un groupe réellement
+     affecté à ce créneau apparaissent — plus de tuiles vides/grisées
+     (demande du 17/09/2026). */
+  const tuiles=Array.from({length:30},(_,i)=>i+1).filter(n=>parSalle[n]).map(n=>{
+    const lg=parSalle[n];
+    const complet = nPointees(lg)===lg.length;
+    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span><span class="lab">${complet?'✓ pointée':lg.length+' cours'}</span></button>`;
+  }).join('');
+  const lgFad=parSalle['FAD'];
+  const tuileFad = lgFad ? (()=>{ const complet=nPointees(lgFad)===lgFad.length;
+      return `<button class="tuileSalle fad ${complet?'faite':''}" data-salle="FAD"><span class="num">FAD</span><span class="lab">${complet?'✓ pointée':lgFad.length+' cours'}</span></button>`; })() : '';
+  const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
+  box.innerHTML = `<div class="compteur">${totalPointees} / ${total} pointés</div>
+    <div class="grilleSalles">${tuiles}${tuileFad}</div>`;
+  box.querySelectorAll('.tuileSalle[data-salle]').forEach(btn=>{
+    btn.onclick=()=>{ AGENT_SALLE = btn.dataset.salle==='FAD' ? 'FAD' : +btn.dataset.salle; AGENT_ATTENTE={}; afficherSalleDetail(); };
+  });
+}
+/* ÉCRAN 2 : détail d'une salle — une carte par groupe qui s'y trouve à ce
+   créneau (le plus souvent une seule). Le choix reste LOCAL (`AGENT_ATTENTE`)
+   tant que l'agent n'a pas appuyé sur Valider : Annuler l'efface sans rien
+   enregistrer et laisse recommencer ; Valider écrit tout d'un coup et
+   ramène à la grille des salles (demande du 17/09/2026). */
+async function afficherSalleDetail(){
+  const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
+  const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
+  AGENT_SALLE_MARQUES = pointage[cle] || {};
+  rendreSalleDetail();
+}
+function rendreSalleDetail(){
+  const box=$('listeFormateurs');
+  const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
+  const lignes=AGENT_PAR_GROUPE.filter(l=>clefSalle(l)===AGENT_SALLE);
+  const labelSalle = AGENT_SALLE==='FAD' ? 'À distance' : 'Salle '+AGENT_SALLE;
+  const cartes=lignes.map(({gi,fi})=>{
     const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
     const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
-    const salleTxt = type===1 ? 'À distance' : (META.S[salleI] ? 'Salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'Salle à affecter');
-    const etat=marques[gi] ? marques[gi].etat : null;
-    const nbSel=marques[gi] ? marques[gi].nb : null;
+    const enAttente=AGENT_ATTENTE[gi], sauve=AGENT_SALLE_MARQUES[gi];
+    const etat = enAttente ? enAttente.etat : (sauve ? sauve.etat : null);
+    const nbSel = enAttente ? enAttente.nb : (sauve ? sauve.nb : null);
     /* Façade « nombre d'absences » plutôt qu'un bouton Présent/Absent trop
-       explicite (demande du 17/09/2026, dissuasion) : l'agent choisit un
-       chiffre de 1 à 25 (nombre de stagiaires absents ce jour-là — une tâche
-       banale, cohérente avec la feuille de présence stagiaires qu'il porte
-       déjà) — n'importe quel chiffre enregistre le formateur PRÉSENT.
-       « Absence collective » (toute la classe absente, cas réel et courant)
-       enregistre le formateur ABSENT. */
+       explicite (dissuasion, demande du 17/09/2026) : n'importe quel
+       chiffre enregistre le formateur PRÉSENT ; « Absence collective »
+       (toute la classe absente, cas réel et courant) l'enregistre ABSENT. */
     const grilleNb=Array.from({length:25},(_,i)=>i+1)
       .map(n=>`<button class="nb ${etat==='present'&&nbSel===n?'on':''}" data-gi="${gi}" data-fi="${fi}" data-nb="${n}">${n}</button>`).join('');
     return `<div class="ligneF" data-gi="${gi}">
-      <div class="cadreSalle">
-        <div class="salleBadge ${type===1?'fad':''}">${type===1?'FAD':String(META.S[salleI]||'?').replace(/^S0?/,'')}</div>
-        <div class="salleTxt">${salleTxt}</div>
-      </div>
       <div class="nom">${nomGroupe}</div>
       <div class="det">Formateur : ${nomF}</div>
       <div class="voletLabel">Nombre d'absence</div>
@@ -371,24 +421,34 @@ async function afficherFormateursDuCreneau(){
       <button class="collectif ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}">Absence collective</button>
     </div>`;
   }).join('');
-  box.innerHTML=lignes;
-  const nMarques=parGroupe.filter(({gi})=>marques[gi]).length;
-  box.insertAdjacentHTML('afterbegin', `<div class="compteur">${nMarques} / ${parGroupe.length} pointés</div>`);
-  const enregistrer=async(gi,fi,etat,nb)=>{
+  box.innerHTML = `<button class="lien-retour" id="btnRetourSalles" style="margin:0 0 10px">← retour aux salles</button>
+    <div class="jourBandeau" style="margin-top:0;padding:14px"><div class="date" style="font-size:18px">${labelSalle}</div></div>
+    ${cartes}
+    <div class="pairVA">
+      <button class="valider" id="btnValiderSalle">✔ Valider</button>
+      <button class="annuler" id="btnAnnulerSalle">✗ Annuler</button>
+    </div>`;
+  $('btnRetourSalles').onclick=()=>{ AGENT_SALLE=null; AGENT_ATTENTE={}; afficherSalles(); };
+  box.querySelectorAll('button.nb').forEach(btn=>{
+    btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'present', nb:+btn.dataset.nb, fi:+btn.dataset.fi}; rendreSalleDetail(); };
+  });
+  box.querySelectorAll('button.collectif').forEach(btn=>{
+    btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'absent', nb:null, fi:+btn.dataset.fi}; rendreSalleDetail(); };
+  });
+  $('btnAnnulerSalle').onclick=()=>{ AGENT_ATTENTE={}; rendreSalleDetail(); };
+  $('btnValiderSalle').onclick=async()=>{
+    if(!Object.keys(AGENT_ATTENTE).length){ AGENT_SALLE=null; afficherSalles(); return; }
     try{
       const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
       if(!p[cle]) p[cle]={};
-      p[cle][gi]={etat, heure:new Date().toISOString(), fi, nb:nb==null?null:nb};
+      Object.entries(AGENT_ATTENTE).forEach(([gi,v])=>{
+        p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, nb:v.nb==null?null:v.nb};
+      });
       await ecrireDoc('pointage/s'+AGENT_SW, p);
-      afficherFormateursDuCreneau();   // recompte le compteur
+      AGENT_SALLE=null; AGENT_ATTENTE={};
+      afficherSalles();
     }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
   };
-  box.querySelectorAll('button.nb').forEach(btn=>{
-    btn.onclick=()=>enregistrer(+btn.dataset.gi, +btn.dataset.fi, 'present', +btn.dataset.nb);
-  });
-  box.querySelectorAll('button.collectif').forEach(btn=>{
-    btn.onclick=()=>enregistrer(+btn.dataset.gi, +btn.dataset.fi, 'absent', null);
-  });
 }
 
 /* ------------------------- RESPONSABLE ------------------------- */
