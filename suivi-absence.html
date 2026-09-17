@@ -93,6 +93,14 @@ button{font-family:inherit; cursor:pointer;}
 .onglets{display:flex; gap:8px; margin:18px 0 14px; flex-wrap:wrap;}
 .onglets button{padding:9px 16px; border-radius:999px; border:1px solid var(--ligne); background:var(--carte); color:var(--encre); font-size:13px; font-weight:600;}
 .onglets button.on{background:var(--encre); color:var(--papier); border-color:var(--encre);}
+/* Navigation responsable : 42 semaines puis 6 jours, en bandes défilantes
+   horizontalement (demande du 18/09/2026) — pas de sélecteur déroulant, des
+   boutons à toucher directement. */
+.chipsRow{display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:4px 2px 8px; margin-top:12px;}
+.chipsRow button{flex:none; padding:8px 14px; border-radius:999px; border:1px solid var(--ligne); background:var(--carte); color:var(--encre); font-size:13px; font-weight:600; white-space:nowrap;}
+.chipsRow button.on{background:var(--bleu); color:#fff; border-color:var(--bleu);}
+.blocCreneau{margin-top:14px;}
+.blocCreneau h4{font-family:'Archivo',sans-serif; font-size:13px; margin:0 0 6px; color:var(--encre-doux); text-transform:uppercase; letter-spacing:.04em;}
 table.pointage{width:100%; border-collapse:collapse; font-size:13px; background:var(--carte); border-radius:14px; overflow:hidden; box-shadow:var(--ombre);}
 table.pointage th{background:var(--gris-doux); padding:9px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--encre-doux);}
 table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
@@ -164,12 +172,10 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
       </div>
     </div>
     <div id="admContenu" hidden>
-      <div class="onglets">
-        <button data-onglet="jour" class="on">Aujourd'hui</button>
-        <button data-onglet="semaine">Cette semaine</button>
-      </div>
-      <div id="admJour"></div>
-      <div id="admSemaine" hidden></div>
+      <div id="admSemaines" class="chipsRow"></div>
+      <div id="admJours" class="chipsRow"></div>
+      <div id="admCreneaux" class="chipsRow"></div>
+      <div id="admDetail"></div>
       <button class="lien-retour" id="btnDeconnexionAdmin">← se déconnecter</button>
     </div>
   </section>
@@ -474,78 +480,127 @@ $('okAdm').onclick=async()=>{
   }catch(e){ err.textContent='Connexion refusée : '+(e.message||e); err.hidden=false; }
 };
 $('btnDeconnexionAdmin').onclick=async()=>{ try{ await fbAuth.signOut(); }catch(e){} vue('Accueil'); };
-document.querySelectorAll('.onglets button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.onglets button').forEach(x=>x.classList.toggle('on', x===b));
-  $('admJour').hidden = b.dataset.onglet!=='jour';
-  $('admSemaine').hidden = b.dataset.onglet!=='semaine';
-});
 
-let ADMIN_UNSUB=null;
+/* Vue responsable détaillée (demande du 18/09/2026) : 42 semaines à toucher,
+   puis 6 jours pour la semaine choisie, détail par créneau, formateurs
+   triés par ordre alphabétique, salle affichée. */
+/* ADMIN_JOUR : 0-5 (jour) ou 'semaine' (synthèse). ADMIN_CRENEAU : null tant
+   qu'aucun des 4 boutons n'a été touché — aucune liste de formateurs ne
+   s'affiche avant ça (demande du 18/09/2026). */
+let ADMIN_SEM=0, ADMIN_JOUR=0, ADMIN_CRENEAU=null, ADMIN_UNSUB=null;
 async function demarrerAdmin(){
   await ouvrirFirebase();
   if(!META) await chargerMeta();
   const info=semaineEtJourDuJour();
-  if(!info){ $('admJour').innerHTML='<p class="note">Aucun emploi publié pour aujourd\'hui.</p>'; return; }
-  const sessions=await chargerSemaine(info.w);
+  ADMIN_SEM = info ? info.w : 0;
+  ADMIN_JOUR = info ? info.jour : 0;
+  ADMIN_CRENEAU=null;
+  renderNavAdmin();
+  await chargerVueAdmin();
+}
+function renderNavAdmin(){
+  /* Toujours 42 semaines proposées (calendrier complet de l'année), même si
+     seules les premières ont été publiées jusqu'ici — demande du
+     18/09/2026 : les boutons ne doivent pas se limiter à ce qui existe déjà. */
+  const nSem=Math.max(42, META.nbSem||0, (META.lundis||[]).length);
+  const semBox=$('admSemaines');
+  semBox.innerHTML=Array.from({length:nSem},(_,w)=>
+    `<button class="${w===ADMIN_SEM?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
+  semBox.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+    ADMIN_SEM=+b.dataset.w; ADMIN_CRENEAU=null; renderNavAdmin(); await chargerVueAdmin();
+  });
+  /* Les 6 jours, puis une 7e puce « Synthèse semaine » juste après Samedi. */
+  const jourBox=$('admJours');
+  jourBox.innerHTML=JOURS.map((j,i)=>
+    `<button class="${i===ADMIN_JOUR?'on':''}" data-j="${i}">${j.charAt(0).toUpperCase()+j.slice(1)}</button>`).join('')
+    +`<button class="${ADMIN_JOUR==='semaine'?'on':''}" data-j="semaine">📊 Synthèse semaine</button>`;
+  jourBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    ADMIN_JOUR = b.dataset.j==='semaine' ? 'semaine' : +b.dataset.j;
+    ADMIN_CRENEAU=null;
+    renderNavAdmin(); rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
+  });
+  /* 4 boutons créneaux, seulement en vue « jour » — rien à choisir en
+     synthèse semaine, qui est déjà un cumul. */
+  const crBox=$('admCreneaux');
+  if(ADMIN_JOUR==='semaine'){ crBox.innerHTML=''; }
+  else {
+    crBox.innerHTML=CRENEAUX.map((c,i)=>
+      `<button class="${i===ADMIN_CRENEAU?'on':''}" data-c="${i}">${i+1}ᵉ créneau</button>`).join('');
+    crBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      ADMIN_CRENEAU=+b.dataset.c; renderNavAdmin(); rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
+    });
+  }
+}
+let ADMIN_SESSIONS=[], ADMIN_POINTAGE={};
+async function chargerVueAdmin(){
+  $('admDetail').innerHTML='<p class="videMsg">Chargement…</p>';
+  ADMIN_SESSIONS=await chargerSemaine(ADMIN_SEM);
   if(ADMIN_UNSUB) ADMIN_UNSUB();
-  ADMIN_UNSUB=fs.doc('pointage/s'+info.w).onSnapshot(snap=>{
+  ADMIN_UNSUB=fs.doc('pointage/s'+ADMIN_SEM).onSnapshot(snap=>{
     let pointage={};
     if(snap.exists){ const o=snap.data()||{}; try{ pointage=JSON.parse(o.j||'{}'); }catch(e){} }
-    rendreJour(sessions, info.jour, pointage);
-    rendreSemaine(sessions, pointage);
-  }, err=>{ console.error(err); $('admJour').innerHTML='<p class="erreur">Lecture impossible : '+err.message+'</p>'; });
+    ADMIN_POINTAGE=pointage;
+    rendreDetailAdmin(ADMIN_SESSIONS, ADMIN_POINTAGE);
+  }, err=>{ console.error(err); $('admDetail').innerHTML='<p class="erreur">Lecture impossible : '+err.message+'</p>'; });
 }
-/* Aplatit les séances en une ligne par groupe (comme côté agent), puis lit
-   l'état de présence du formateur à partir de sa/ses ligne(s) groupe. */
+/* Aplatit les séances en une ligne par groupe (comme côté agent), avec la
+   salle, puis lit l'état de présence à partir de sa/ses ligne(s) groupe. */
 function lignesParGroupe(sessions){
   const l=[];
   sessions.forEach(s=>{
-    const fi=s[0], jour=s[1], creneau=s[2], type=s[3], groupesI=s[6]||[];
+    const fi=s[0], jour=s[1], creneau=s[2], type=s[3], salleI=s[4], groupesI=s[6]||[];
     if(type===1) return;   // FAD éliminée : l'agent ne pointe rien à distance
-    groupesI.forEach(gi=>l.push({fi, jour, creneau, gi}));
+    groupesI.forEach(gi=>l.push({fi, jour, creneau, salleI, gi}));
   });
   return l;
 }
-function rendreJour(sessions, jour, pointage){
-  const auj=new Date();
-  const ici=lignesParGroupe(sessions).filter(l=>l.jour===jour).sort((a,b)=>a.creneau-b.creneau || ((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
-  const marqueDe=l=>{ const c=pointage[l.jour+'_'+l.creneau]; return c && c[l.gi]; };
-  const nPresent=ici.filter(l=>{ const m=marqueDe(l); return m && m.etat==='present'; }).length;
-  const nAbsent=ici.filter(l=>{ const m=marqueDe(l); return m && m.etat==='absent'; }).length;
+const marqueDe=(pointage,l)=>{ const c=pointage[l.jour+'_'+l.creneau]; return c && c[l.gi]; };
+function rendreDetailAdmin(sessions, pointage){
+  const box=$('admDetail');
+  if(ADMIN_JOUR==='semaine'){ box.innerHTML=syntheseSemaineHtml(sessions, pointage); return; }
+  const ici=lignesParGroupe(sessions).filter(l=>l.jour===ADMIN_JOUR);
+  const nPresent=ici.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='present'; }).length;
+  const nAbsent=ici.filter(l=>{ const m=marqueDe(pointage,l); return m && m.etat==='absent'; }).length;
   const nAttente=ici.length-nPresent-nAbsent;
-  let html=`<p class="note" style="margin-bottom:10px">${dateLongue(auj)} — mis à jour en direct.</p>
-    <div class="resume">
+  let html=`<div class="resume">
       <div class="bloc"><b>${ici.length}</b><span>groupes prévus</span></div>
       <div class="bloc" style="color:var(--vert)"><b>${nPresent}</b><span>présents</span></div>
       <div class="bloc" style="color:var(--rouge)"><b>${nAbsent}</b><span>absents</span></div>
       <div class="bloc"><b>${nAttente}</b><span>en attente</span></div>
     </div>`;
-  if(!ici.length){ html+='<p class="videMsg">Aucun cours aujourd\'hui.</p>'; $('admJour').innerHTML=html; return; }
-  html+=`<div class="cadre-scroll"><table class="pointage"><tr><th>Créneau</th><th>Groupe</th><th>Formateur</th><th>État</th><th>Heure</th></tr>`;
-  ici.forEach(l=>{
-    const marque=marqueDe(l);
+  if(!ici.length){ html+='<p class="videMsg">Aucun cours en salle ce jour.</p>'; box.innerHTML=html; return; }
+  if(ADMIN_CRENEAU==null){ html+='<p class="videMsg">Choisissez un créneau ci-dessus pour voir le détail.</p>'; box.innerHTML=html; return; }
+  const dc=ici.filter(l=>l.creneau===ADMIN_CRENEAU)
+    .sort((a,b)=>(META.nomAff[a.fi]||META.F[a.fi]||'').localeCompare(META.nomAff[b.fi]||META.F[b.fi]||''));
+  if(!dc.length){ html+='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; box.innerHTML=html; return; }
+  html+=`<div class="blocCreneau"><h4>${CRENEAUX[ADMIN_CRENEAU]}</h4>
+    <div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Groupe</th><th>Salle</th><th>État</th><th>Heure</th></tr>`;
+  dc.forEach(l=>{
+    const marque=marqueDe(pointage,l);
     const nom=META.nomAff[l.fi]||META.F[l.fi]||'—';
     const groupe=(META.G[l.gi]||[])[0]||'—';
+    const salle=META.S[l.salleI] ? 'Salle '+String(META.S[l.salleI]).replace(/^S0?/,'') : '—';
     const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
       : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
       : '<span class="etat absent">✗ absent</span>';
     const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    html+=`<tr><td>${CRENEAUX[l.creneau]}</td><td>${groupe}</td><td>${nom}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
+    html+=`<tr><td>${nom}</td><td>${groupe}</td><td>${salle}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
   });
-  html+='</table></div>';
-  $('admJour').innerHTML=html;
+  html+='</table></div></div>';
+  box.innerHTML=html;
 }
-function rendreSemaine(sessions, pointage){
+/* Synthèse de la semaine entière, par formateur, ordre alphabétique. */
+function syntheseSemaineHtml(sessions, pointage){
   const parF={};
   lignesParGroupe(sessions).forEach(l=>{
     const o=parF[l.fi]||(parF[l.fi]={prevu:0, present:0, absent:0});
     o.prevu++;
-    const c=pointage[l.jour+'_'+l.creneau], m=c && c[l.gi];
+    const m=marqueDe(pointage,l);
     if(m && m.etat==='present') o.present++;
     else if(m && m.etat==='absent') o.absent++;
   });
-  const lignes=Object.keys(parF).map(Number).sort((a,b)=>(META.nomAff[a]||'').localeCompare(META.nomAff[b]||''));
-  if(!lignes.length){ $('admSemaine').innerHTML='<p class="videMsg">Aucun emploi cette semaine.</p>'; return; }
+  const lignes=Object.keys(parF).map(Number).sort((a,b)=>(META.nomAff[a]||META.F[a]||'').localeCompare(META.nomAff[b]||META.F[b]||''));
+  if(!lignes.length) return '<p class="videMsg">Aucun cours en salle cette semaine.</p>';
   let html=`<div class="cadre-scroll"><table class="pointage"><tr><th>Formateur</th><th>Groupes prévus</th><th>Présent</th><th>Absent</th><th>En attente</th><th>Taux</th></tr>`;
   lignes.forEach(fi=>{
     const o=parF[fi];
@@ -557,7 +612,7 @@ function rendreSemaine(sessions, pointage){
       <td>${attente}</td><td>${taux}</td></tr>`;
   });
   html+='</table></div>';
-  $('admSemaine').innerHTML=html;
+  return html;
 }
 
 /* ------------------------- démarrage ------------------------- */
