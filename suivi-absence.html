@@ -55,6 +55,12 @@ button{font-family:inherit; cursor:pointer;}
 .ligneF .nom{font-family:'Archivo',sans-serif; font-size:19px; font-weight:800; margin-top:10px;}
 .ligneF .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
 .ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+.voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
+.grille25{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:6px;}
+.grille25 .nb{padding:12px 0; border-radius:9px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre);}
+.grille25 .nb.on{border-color:var(--vert); background:var(--vert); color:#fff;}
+.collectif{width:100%; margin-top:12px; padding:15px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre-doux);}
+.collectif.on{border-color:var(--rouge); background:var(--rouge); color:#fff;}
 .bp,.ba{padding:18px 6px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:22px; font-weight:800; color:var(--encre-doux);}
 .bp.on{border-color:var(--vert); background:var(--vert); color:#fff;}
 .ba.on{border-color:var(--rouge); background:var(--rouge); color:#fff;}
@@ -343,6 +349,16 @@ async function afficherFormateursDuCreneau(){
     const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
     const salleTxt = type===1 ? 'À distance' : (META.S[salleI] ? 'Salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'Salle à affecter');
     const etat=marques[gi] ? marques[gi].etat : null;
+    const nbSel=marques[gi] ? marques[gi].nb : null;
+    /* Façade « nombre d'absences » plutôt qu'un bouton Présent/Absent trop
+       explicite (demande du 17/09/2026, dissuasion) : l'agent choisit un
+       chiffre de 1 à 25 (nombre de stagiaires absents ce jour-là — une tâche
+       banale, cohérente avec la feuille de présence stagiaires qu'il porte
+       déjà) — n'importe quel chiffre enregistre le formateur PRÉSENT.
+       « Absence collective » (toute la classe absente, cas réel et courant)
+       enregistre le formateur ABSENT. */
+    const grilleNb=Array.from({length:25},(_,i)=>i+1)
+      .map(n=>`<button class="nb ${etat==='present'&&nbSel===n?'on':''}" data-gi="${gi}" data-fi="${fi}" data-nb="${n}">${n}</button>`).join('');
     return `<div class="ligneF" data-gi="${gi}">
       <div class="cadreSalle">
         <div class="salleBadge ${type===1?'fad':''}">${type===1?'FAD':String(META.S[salleI]||'?').replace(/^S0?/,'')}</div>
@@ -350,29 +366,28 @@ async function afficherFormateursDuCreneau(){
       </div>
       <div class="nom">${nomGroupe}</div>
       <div class="det">Formateur : ${nomF}</div>
-      <div class="boutons">
-        <button class="bp ${etat==='present'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="present">✓ Présent</button>
-        <button class="ba ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="absent">✗ Absent</button>
-      </div>
+      <div class="voletLabel">Nombre d'absence</div>
+      <div class="grille25">${grilleNb}</div>
+      <button class="collectif ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}">Absence collective</button>
     </div>`;
   }).join('');
   box.innerHTML=lignes;
   const nMarques=parGroupe.filter(({gi})=>marques[gi]).length;
   box.insertAdjacentHTML('afterbegin', `<div class="compteur">${nMarques} / ${parGroupe.length} pointés</div>`);
-  box.querySelectorAll('button[data-etat]').forEach(btn=>{
-    btn.onclick=async()=>{
-      const gi=+btn.dataset.gi, fi=+btn.dataset.fi, etat=btn.dataset.etat;
-      const ligne=btn.closest('.ligneF');
-      ligne.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
-      btn.classList.add('on');
-      try{
-        const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
-        if(!p[cle]) p[cle]={};
-        p[cle][gi]={etat, heure:new Date().toISOString(), fi};
-        await ecrireDoc('pointage/s'+AGENT_SW, p);
-        afficherFormateursDuCreneau();   // recompte le compteur
-      }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
-    };
+  const enregistrer=async(gi,fi,etat,nb)=>{
+    try{
+      const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
+      if(!p[cle]) p[cle]={};
+      p[cle][gi]={etat, heure:new Date().toISOString(), fi, nb:nb==null?null:nb};
+      await ecrireDoc('pointage/s'+AGENT_SW, p);
+      afficherFormateursDuCreneau();   // recompte le compteur
+    }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
+  };
+  box.querySelectorAll('button.nb').forEach(btn=>{
+    btn.onclick=()=>enregistrer(+btn.dataset.gi, +btn.dataset.fi, 'present', +btn.dataset.nb);
+  });
+  box.querySelectorAll('button.collectif').forEach(btn=>{
+    btn.onclick=()=>enregistrer(+btn.dataset.gi, +btn.dataset.fi, 'absent', null);
   });
 }
 
