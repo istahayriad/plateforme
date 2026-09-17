@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
-<title>ISTA Hay Riad — Présence stagiaires</title>
+<title>ISTA Hay Riad — Suivi d'absence</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
 :root{
@@ -47,7 +47,12 @@ button{font-family:inherit; cursor:pointer;}
 .creneaux button.actuel{border-color:var(--vert); background:var(--vert-doux); color:var(--vert);}
 .compteur{text-align:center; font-size:14px; color:var(--encre-doux); margin:14px 0 4px;}
 .ligneF{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:16px; margin-top:12px; box-shadow:var(--ombre);}
-.ligneF .nom{font-family:'Archivo',sans-serif; font-size:19px; font-weight:800;}
+.ligneF .cadreSalle{display:flex; align-items:center; gap:12px;}
+.salleBadge{flex:none; width:54px; height:54px; border-radius:14px; background:var(--bleu-doux); color:var(--bleu);
+  display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-size:21px; font-weight:800;}
+.salleBadge.fad{background:var(--vert-doux); color:var(--vert); font-size:14px;}
+.salleTxt{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--encre-doux);}
+.ligneF .nom{font-family:'Archivo',sans-serif; font-size:19px; font-weight:800; margin-top:10px;}
 .ligneF .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
 .ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
 .bp,.ba{padding:18px 6px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:22px; font-weight:800; color:var(--encre-doux);}
@@ -85,7 +90,7 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 <div class="enveloppe">
   <header class="tete">
     <div class="txt">
-      <h1>ISTA Hay Riad — Présence stagiaires</h1>
+      <h1>ISTA Hay Riad — Suivi d'absence</h1>
       <p id="piedEtat">Chargement…</p>
     </div>
   </header>
@@ -321,18 +326,30 @@ async function afficherFormateursDuCreneau(){
     groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
   });
   if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours à ce créneau.</p>'; return; }
-  parGroupe.sort((a,b)=>((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
+  /* Tri par numéro de salle (1 à 30), pas par nom de groupe : l'agent
+     traverse le campus salle par salle pendant sa tournée physique — le
+     distanciel (sans salle réelle) passe en dernier (demande du 17/09/2026). */
+  const numSalle=({type,salleI})=>{
+    if(type===1) return 999;
+    const m=String(META.S[salleI]||'').match(/\d+/);
+    return m ? +m[0] : 998;
+  };
+  parGroupe.sort((a,b)=> numSalle(a)-numSalle(b) || ((META.G[a.gi]||[])[0]||'').localeCompare((META.G[b.gi]||[])[0]||''));
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   const marques=(pointage[cle]) || {};
   const lignes=parGroupe.map(({gi,fi,type,salleI})=>{
     const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
     const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
-    const salle=type===1 ? 'à distance' : (META.S[salleI] ? 'salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'salle à affecter');
+    const salleTxt = type===1 ? 'À distance' : (META.S[salleI] ? 'Salle '+String(META.S[salleI]).replace(/^S0?/,'') : 'Salle à affecter');
     const etat=marques[gi] ? marques[gi].etat : null;
     return `<div class="ligneF" data-gi="${gi}">
+      <div class="cadreSalle">
+        <div class="salleBadge ${type===1?'fad':''}">${type===1?'FAD':String(META.S[salleI]||'?').replace(/^S0?/,'')}</div>
+        <div class="salleTxt">${salleTxt}</div>
+      </div>
       <div class="nom">${nomGroupe}</div>
-      <div class="det">Formateur : ${nomF} · ${salle}</div>
+      <div class="det">Formateur : ${nomF}</div>
       <div class="boutons">
         <button class="bp ${etat==='present'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="present">✓ Présent</button>
         <button class="ba ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}" data-etat="absent">✗ Absent</button>
