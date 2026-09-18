@@ -285,6 +285,23 @@ async function ajouterAbsences(nomGroupe, paires){    // paires = [[nom,prenom],
   const groupes=new Set(pub.groupes||[]); groupes.add(nomGroupe);
   await ecrireDoc('pub/abs', {sem, groupes:[...groupes]});
 }
+/* Symétrique d'ajouterAbsences : retire les 2h30 d'un stagiaire qui n'est
+   plus coché absent (l'agent corrige sa saisie). Ne crée jamais de semaine :
+   si la semaine n'existe pas encore, il n'y a rien à retirer. */
+async function retirerAbsences(nomGroupe, paires){
+  if(!paires.length) return;
+  const weekLabel='S'+(AGENT_SW+1);
+  const pub=(await lireDoc('pub/abs')) || {sem:[]};
+  const widx=(pub.sem||[]).indexOf(weekLabel);
+  if(widx<0) return;
+  const doc=(await lireDoc('abs/'+nomGroupe)) || {liste:[]};
+  const liste=doc.liste||[];
+  paires.forEach(([nom,prenom])=>{
+    const row=liste.find(l=>normNom(l[1])===normNom(nom) && normNom(l[2])===normNom(prenom));
+    if(row && row[3] && row[3][widx]) row[3][widx]=Math.max(0, row[3][widx]-DUREE_CRENEAU);
+  });
+  await ecrireDoc('abs/'+nomGroupe, {liste});
+}
 
 /* ------------------------- emplois publiés ------------------------- */
 let META=null;                 // {dates, lundis, nomAff, nomFam, F, G, M, S, nbSem}
@@ -482,6 +499,22 @@ async function afficherSalleDetail(){
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   AGENT_SALLE_MARQUES = pointage[cle] || {};
+  /* AGENT_ATTENTE est préamorcé avec ce qui est déjà enregistré (noms
+     retrouvés dans le pointage sauvegardé) : sans ça, le premier clic sur
+     un nom déjà coché repartait d'un état vide au lieu de le décocher
+     (demande du 18/09/2026 — un nom décoché ne se retirait jamais). */
+  AGENT_PAR_GROUPE.filter(l=>clefSalle(l)===AGENT_SALLE).forEach(({gi,fi})=>{
+    if(AGENT_ATTENTE[gi]) return;
+    const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
+    const roster=ROSTER_GROUPE[nomGroupe]||[];
+    const sauve=AGENT_SALLE_MARQUES[gi];
+    const absentsIdx=new Set();
+    (sauve && sauve.absents || []).forEach(([nom,prenom])=>{
+      const i=roster.findIndex(([n,p])=>normNom(n)===normNom(nom) && normNom(p)===normNom(prenom));
+      if(i>=0) absentsIdx.add(i);
+    });
+    if(sauve) AGENT_ATTENTE[gi]={etat:sauve.etat, absentsIdx, fi};
+  });
   rendreSalleDetail();
 }
 function rendreSalleDetail(){
@@ -494,9 +527,8 @@ function rendreSalleDetail(){
     const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
     const roster=ROSTER_GROUPE[nomGroupe]||[];
     const enAttente=AGENT_ATTENTE[gi];
-    const sauve=AGENT_SALLE_MARQUES[gi];
     const absentsIdx = enAttente ? enAttente.absentsIdx : new Set();
-    const etat = enAttente ? enAttente.etat : (sauve ? sauve.etat : null);
+    const etat = enAttente ? enAttente.etat : null;
     /* Façade « stagiaires absents » plutôt qu'un bouton Présent/Absent trop
        explicite (dissuasion, demande du 17-18/09/2026) : toucher un nom
        enregistre le formateur PRÉSENT (une séance a bien eu lieu) et compte
@@ -555,8 +587,19 @@ function rendreSalleDetail(){
         const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
         const roster=ROSTER_GROUPE[nomGroupe]||[];
         const paires=[...v.absentsIdx].map(i=>roster[i]).filter(Boolean);
-        p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, absents:paires.length};
-        try{ await ajouterAbsences(nomGroupe, paires); }catch(e){}
+        /* Comparer à ce qui était déjà enregistré pour CE créneau, pas
+           réajouter systématiquement : une revalidation (correction, ou
+           simple réouverture de la salle) ne doit ni dupliquer les heures
+           déjà comptées ni oublier de retirer un nom décoché. */
+        const avant=(p[cle][gi] && p[cle][gi].absents) || [];
+        const cleDe=([n,pr])=>normNom(n)+'|'+normNom(pr);
+        const clesAvant=new Set(avant.map(cleDe));
+        const clesApres=new Set(paires.map(cleDe));
+        const ajoutes=paires.filter(x=>!clesAvant.has(cleDe(x)));
+        const retires=avant.filter(x=>!clesApres.has(cleDe(x)));
+        p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, absents:paires};
+        try{ await ajouterAbsences(nomGroupe, ajoutes); }catch(e){}
+        try{ await retirerAbsences(nomGroupe, retires); }catch(e){}
       }
       await ecrireDoc('pointage/s'+AGENT_SW, p);
       AGENT_SALLE=null; AGENT_ATTENTE={};
