@@ -63,7 +63,7 @@ button{font-family:inherit; cursor:pointer;}
 .ligneF .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
 .ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
 .voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
-.grille25{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:6px;}
+.grilleNoms{display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin-top:6px;}
 .grilleSalles{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:6px;}
 .tuileSalle{display:flex; align-items:center; justify-content:center; padding:20px 4px;
   border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px;}
@@ -74,9 +74,11 @@ button{font-family:inherit; cursor:pointer;}
 .pairVA{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
 .pairVA .valider{padding:18px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:17px; font-weight:800; box-shadow:var(--ombre);}
 .pairVA .annuler{padding:18px 6px; border-radius:14px; border:2px solid var(--ligne); background:var(--carte); color:var(--encre-doux); font-size:17px; font-weight:800;}
-.grille25 .nb{padding:12px 0; border-radius:9px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre);}
-.grille25 .nb.on{border-color:var(--vert); background:var(--vert); color:#fff;}
-.collectif{width:100%; margin-top:12px; padding:15px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre-doux);}
+.grilleNoms .nomBtn{padding:10px 6px; border-radius:9px; border:2px solid var(--ligne); background:var(--carte); font-size:13px; font-weight:700; color:var(--encre); text-align:center;}
+.grilleNoms .nomBtn.on{border-color:var(--rouge); background:var(--rouge); color:#fff;}
+.toutPresent{width:100%; margin-top:12px; padding:13px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:14px; font-weight:700; color:var(--encre-doux);}
+.toutPresent.on{border-color:var(--vert); background:var(--vert); color:#fff;}
+.collectif{width:100%; margin-top:8px; padding:15px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:15px; font-weight:700; color:var(--encre-doux);}
 .collectif.on{border-color:var(--rouge); background:var(--rouge); color:#fff;}
 .bp,.ba{padding:18px 6px; border-radius:12px; border:2px solid var(--ligne); background:var(--carte); font-size:22px; font-weight:800; color:var(--encre-doux);}
 .bp.on{border-color:var(--vert); background:var(--vert); color:#fff;}
@@ -241,6 +243,49 @@ async function lireDoc(p){
 }
 async function ecrireDoc(p, obj){ await docJ(p).set({j:JSON.stringify(obj), maj:new Date().toISOString()}); }
 
+/* ---------------- remontée vers l'état d'absence des stagiaires (demande
+   du 18/09/2026) : un stagiaire pointé absent par l'agent pendant sa tournée
+   s'ajoute automatiquement au même total d'heures que celui du classeur
+   déposé par le gestionnaire (collection abs/<groupe> de la plateforme),
+   sur la semaine correspondante — un créneau vaut 2 h 30 (voir CRENEAUX).
+   N'écrit que pour les groupes dont la liste des stagiaires est publiée :
+   impossible d'attribuer une absence à un nom inconnu. */
+const DUREE_CRENEAU=2.5;
+const normNom=s=>String(s||'').trim().toUpperCase();
+async function assurerSemaineAbs(weekLabel){
+  const pub=(await lireDoc('pub/abs')) || {sem:[], groupes:[]};
+  const sem=pub.sem||[];
+  if(sem.includes(weekLabel)) return sem;
+  const nvSem=[...sem, weekLabel];
+  for(const g of (pub.groupes||[])){
+    try{
+      const doc=(await lireDoc('abs/'+g)) || {liste:[]};
+      const liste=(doc.liste||[]).map(l=>{ const h=(l[3]||[]).slice(); h.push(0); return [l[0],l[1],l[2],h,l[4]||'',l[5]||'',l[6]||'']; });
+      await ecrireDoc('abs/'+g, {liste});
+    }catch(e){}
+  }
+  await ecrireDoc('pub/abs', {sem:nvSem, groupes:pub.groupes||[]});
+  return nvSem;
+}
+async function ajouterAbsences(nomGroupe, paires){    // paires = [[nom,prenom], ...]
+  if(!paires.length) return;
+  const weekLabel='S'+(AGENT_SW+1);
+  const sem=await assurerSemaineAbs(weekLabel);
+  const widx=sem.indexOf(weekLabel);
+  const doc=(await lireDoc('abs/'+nomGroupe)) || {liste:[]};
+  const liste=doc.liste||[];
+  paires.forEach(([nom,prenom])=>{
+    let row=liste.find(l=>normNom(l[1])===normNom(nom) && normNom(l[2])===normNom(prenom));
+    if(!row){ row=[nomGroupe, nom, prenom, sem.map(()=>0), '', '', '']; liste.push(row); }
+    if(row[3].length<sem.length) row[3]=row[3].concat(Array(sem.length-row[3].length).fill(0));
+    row[3][widx]=(row[3][widx]||0)+DUREE_CRENEAU;
+  });
+  await ecrireDoc('abs/'+nomGroupe, {liste});
+  const pub=(await lireDoc('pub/abs')) || {sem, groupes:[]};
+  const groupes=new Set(pub.groupes||[]); groupes.add(nomGroupe);
+  await ecrireDoc('pub/abs', {sem, groupes:[...groupes]});
+}
+
 /* ------------------------- emplois publiés ------------------------- */
 let META=null;                 // {dates, lundis, nomAff, nomFam, F, G, M, S, nbSem}
 let SEMAINE_CACHE={};          // w -> sessions
@@ -248,17 +293,26 @@ async function chargerMeta(){
   META=await lireDoc('pub/meta');
   return META;
 }
-/* Effectif de chaque groupe (demande du 18/09/2026), lu depuis la même
-   liste de stagiaires que la plateforme de consultation — un stagiaire est
-   [nom, prénom, groupe, empreinte], on compte par groupe. */
+/* Effectif de chaque groupe et liste nominative (demande du 18/09/2026), lus
+   depuis la même liste de stagiaires que la plateforme de consultation — un
+   stagiaire est [nom, prénom, groupe, empreinte]. La liste nominative sert à
+   pointer un stagiaire absent par son nom (§ ci-dessous, écran salle) plutôt
+   que par un simple chiffre. */
 let EFFECTIF_GROUPE={};
+let ROSTER_GROUPE={};
 async function chargerEffectifs(){
   try{
     const d=await lireDoc('pub/stagiaires');
     const liste=(d && d.liste) || [];
-    EFFECTIF_GROUPE={};
-    liste.forEach(s=>{ const g=s && s[2]; if(g) EFFECTIF_GROUPE[g]=(EFFECTIF_GROUPE[g]||0)+1; });
-  }catch(e){ EFFECTIF_GROUPE={}; }
+    EFFECTIF_GROUPE={}; ROSTER_GROUPE={};
+    liste.forEach(s=>{
+      const nom=s&&s[0], prenom=s&&s[1], g=s&&s[2];
+      if(!g) return;
+      EFFECTIF_GROUPE[g]=(EFFECTIF_GROUPE[g]||0)+1;
+      (ROSTER_GROUPE[g]=ROSTER_GROUPE[g]||[]).push([nom||'', prenom||'']);
+    });
+    Object.values(ROSTER_GROUPE).forEach(r=>r.sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1])));
+  }catch(e){ EFFECTIF_GROUPE={}; ROSTER_GROUPE={}; }
 }
 async function chargerSemaine(w){
   if(SEMAINE_CACHE[w]) return SEMAINE_CACHE[w];
@@ -438,21 +492,26 @@ function rendreSalleDetail(){
   const cartes=lignes.map(({gi,fi})=>{
     const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
     const nomF=META.nomAff[fi]||META.F[fi]||'formateur '+fi;
-    const enAttente=AGENT_ATTENTE[gi], sauve=AGENT_SALLE_MARQUES[gi];
+    const roster=ROSTER_GROUPE[nomGroupe]||[];
+    const enAttente=AGENT_ATTENTE[gi];
+    const sauve=AGENT_SALLE_MARQUES[gi];
+    const absentsIdx = enAttente ? enAttente.absentsIdx : new Set();
     const etat = enAttente ? enAttente.etat : (sauve ? sauve.etat : null);
-    const nbSel = enAttente ? enAttente.nb : (sauve ? sauve.nb : null);
-    /* Façade « nombre d'absences » plutôt qu'un bouton Présent/Absent trop
-       explicite (dissuasion, demande du 17/09/2026) : n'importe quel
-       chiffre enregistre le formateur PRÉSENT ; « Absence collective »
-       (toute la classe absente, cas réel et courant) l'enregistre ABSENT. */
-    const grilleNb=Array.from({length:25},(_,i)=>i+1)
-      .map(n=>`<button class="nb ${etat==='present'&&nbSel===n?'on':''}" data-gi="${gi}" data-fi="${fi}" data-nb="${n}">${n}</button>`).join('');
+    /* Façade « stagiaires absents » plutôt qu'un bouton Présent/Absent trop
+       explicite (dissuasion, demande du 17-18/09/2026) : toucher un nom
+       enregistre le formateur PRÉSENT (une séance a bien eu lieu) et compte
+       ce stagiaire absent ; « Absence collective » (toute la classe absente,
+       cas réel et courant) enregistre le formateur ABSENT. Ce relevé nourrit
+       automatiquement l'état d'absence des stagiaires (plateforme). */
+    const grilleNoms=roster.map(([nom,prenom],i)=>
+      `<button class="nomBtn ${absentsIdx.has(i)?'on':''}" data-gi="${gi}" data-fi="${fi}" data-idx="${i}">${prenom} ${nom}</button>`).join('');
     const effectif=EFFECTIF_GROUPE[nomGroupe];
     return `<div class="ligneF" data-gi="${gi}">
       <div class="nom">${nomGroupe}${effectif?` <span class="effectif">${effectif} stagiaires</span>`:''}</div>
       <div class="det">Formateur : ${nomF}</div>
-      <div class="voletLabel">Nombre d'absence</div>
-      <div class="grille25">${grilleNb}</div>
+      ${roster.length?`<div class="voletLabel">Stagiaires absents</div><div class="grilleNoms">${grilleNoms}</div>`
+        :`<div class="voletLabel">Liste des stagiaires non disponible pour ce groupe</div>`}
+      <button class="toutPresent ${etat==='present'&&!absentsIdx.size?'on':''}" data-gi="${gi}" data-fi="${fi}">Tous présents</button>
       <button class="collectif ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}">Absence collective</button>
     </div>`;
   }).join('');
@@ -464,11 +523,27 @@ function rendreSalleDetail(){
       <button class="annuler" id="btnAnnulerSalle">✗ Annuler</button>
     </div>`;
   $('btnRetourSalles').onclick=()=>{ AGENT_SALLE=null; AGENT_ATTENTE={}; afficherSalles(); };
-  box.querySelectorAll('button.nb').forEach(btn=>{
-    btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'present', nb:+btn.dataset.nb, fi:+btn.dataset.fi}; rendreSalleDetail(); };
+  box.querySelectorAll('button.nomBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const gi=+btn.dataset.gi, idx=+btn.dataset.idx, fi=+btn.dataset.fi;
+      const cur=AGENT_ATTENTE[gi] || {etat:'present', absentsIdx:new Set(), fi};
+      const s=new Set(cur.absentsIdx); if(s.has(idx)) s.delete(idx); else s.add(idx);
+      AGENT_ATTENTE[gi]={etat:'present', absentsIdx:s, fi};
+      rendreSalleDetail();
+    };
+  });
+  box.querySelectorAll('button.toutPresent').forEach(btn=>{
+    btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'present', absentsIdx:new Set(), fi:+btn.dataset.fi}; rendreSalleDetail(); };
   });
   box.querySelectorAll('button.collectif').forEach(btn=>{
-    btn.onclick=()=>{ AGENT_ATTENTE[+btn.dataset.gi]={etat:'absent', nb:null, fi:+btn.dataset.fi}; rendreSalleDetail(); };
+    btn.onclick=()=>{
+      const gi=+btn.dataset.gi, fi=+btn.dataset.fi;
+      const dejaAbsent = AGENT_ATTENTE[gi] && AGENT_ATTENTE[gi].etat==='absent';
+      AGENT_ATTENTE[gi]= dejaAbsent
+        ? {etat:'present', absentsIdx:new Set(), fi}
+        : {etat:'absent', absentsIdx:new Set((ROSTER_GROUPE[(META.G[gi]||[])[0]]||[]).map((_,i)=>i)), fi};
+      rendreSalleDetail();
+    };
   });
   $('btnAnnulerSalle').onclick=()=>{ AGENT_ATTENTE={}; AGENT_SALLE=null; afficherSalles(); };
   $('btnValiderSalle').onclick=async()=>{
@@ -476,9 +551,13 @@ function rendreSalleDetail(){
     try{
       const p=(await lireDoc('pointage/s'+AGENT_SW)) || {};
       if(!p[cle]) p[cle]={};
-      Object.entries(AGENT_ATTENTE).forEach(([gi,v])=>{
-        p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, nb:v.nb==null?null:v.nb};
-      });
+      for(const [gi,v] of Object.entries(AGENT_ATTENTE)){
+        const nomGroupe=(META.G[gi]||[])[0]||'groupe '+gi;
+        const roster=ROSTER_GROUPE[nomGroupe]||[];
+        const paires=[...v.absentsIdx].map(i=>roster[i]).filter(Boolean);
+        p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, absents:paires.length};
+        try{ await ajouterAbsences(nomGroupe, paires); }catch(e){}
+      }
       await ecrireDoc('pointage/s'+AGENT_SW, p);
       AGENT_SALLE=null; AGENT_ATTENTE={};
       afficherSalles();
