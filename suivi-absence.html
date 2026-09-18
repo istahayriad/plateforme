@@ -59,6 +59,7 @@ button{font-family:inherit; cursor:pointer;}
 .salleBadge.fad{background:var(--vert-doux); color:var(--vert); font-size:14px;}
 .salleTxt{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--encre-doux);}
 .ligneF .nom{font-family:'Archivo',sans-serif; font-size:19px; font-weight:800; margin-top:10px;}
+.ligneF .nom .effectif{font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:600; color:var(--encre-doux); background:var(--gris-doux); border-radius:999px; padding:3px 10px; vertical-align:middle; margin-left:4px;}
 .ligneF .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
 .ligneF .boutons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
 .voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
@@ -247,6 +248,18 @@ async function chargerMeta(){
   META=await lireDoc('pub/meta');
   return META;
 }
+/* Effectif de chaque groupe (demande du 18/09/2026), lu depuis la même
+   liste de stagiaires que la plateforme de consultation — un stagiaire est
+   [nom, prénom, groupe, empreinte], on compte par groupe. */
+let EFFECTIF_GROUPE={};
+async function chargerEffectifs(){
+  try{
+    const d=await lireDoc('pub/stagiaires');
+    const liste=(d && d.liste) || [];
+    EFFECTIF_GROUPE={};
+    liste.forEach(s=>{ const g=s && s[2]; if(g) EFFECTIF_GROUPE[g]=(EFFECTIF_GROUPE[g]||0)+1; });
+  }catch(e){ EFFECTIF_GROUPE={}; }
+}
 async function chargerSemaine(w){
   if(SEMAINE_CACHE[w]) return SEMAINE_CACHE[w];
   const d=await lireDoc('pub/s'+w);
@@ -434,8 +447,9 @@ function rendreSalleDetail(){
        (toute la classe absente, cas réel et courant) l'enregistre ABSENT. */
     const grilleNb=Array.from({length:25},(_,i)=>i+1)
       .map(n=>`<button class="nb ${etat==='present'&&nbSel===n?'on':''}" data-gi="${gi}" data-fi="${fi}" data-nb="${n}">${n}</button>`).join('');
+    const effectif=EFFECTIF_GROUPE[nomGroupe];
     return `<div class="ligneF" data-gi="${gi}">
-      <div class="nom">${nomGroupe}</div>
+      <div class="nom">${nomGroupe}${effectif?` <span class="effectif">${effectif} stagiaires</span>`:''}</div>
       <div class="det">Formateur : ${nomF}</div>
       <div class="voletLabel">Nombre d'absence</div>
       <div class="grille25">${grilleNb}</div>
@@ -649,6 +663,7 @@ function syntheseSemaineHtml(sessions, pointage){
   await ouvrirFirebase();
   try{
     await chargerMeta();
+    chargerEffectifs();   // pas bloquant : les cartes s'affichent même si ça tarde
     $('piedEtat').textContent = META
       ? 'Emplois publiés : '+(META.nbSem||0)+' semaines · '+(META.F||[]).length+' formateurs'
       : 'Aucun emploi publié pour le moment.';
