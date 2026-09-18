@@ -121,6 +121,19 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 .resume .bloc.clic{cursor:pointer; user-select:none;}
 .resume .bloc.clic.sel{border-color:var(--bleu); border-width:2px; background:var(--bleu-doux);}
 .note{font-size:12.5px; color:var(--encre-doux);}
+/* État des absences — direction (demande du 18/09/2026) : grille de la
+   semaine, colorée comme sur la plateforme (verte présent, rouge absent,
+   grise non relevé). */
+.grilleAbs{width:100%; border-collapse:separate; border-spacing:6px; margin-top:12px; table-layout:fixed;}
+.grilleAbs th{font-size:10px; text-transform:uppercase; color:var(--encre-doux); padding:0 2px 4px; text-align:center;}
+.grilleAbs th.jr{text-align:right; padding-right:8px; font-size:12px; font-weight:700; color:var(--encre); text-transform:none;}
+.grilleAbs td{background:var(--carte); border:2px solid var(--ligne); border-radius:10px; padding:8px; vertical-align:top; font-size:11px;}
+.grilleAbs td.vide{background:transparent; border-style:dashed;}
+.grilleAbs td.present{background:var(--vert-doux); border-color:var(--vert);}
+.grilleAbs td.absent{background:var(--rouge-doux); border-color:var(--rouge); cursor:pointer;}
+.grilleAbs td.enattente{border-color:var(--ligne);}
+.grilleAbs .qui{display:block; font-weight:700; color:var(--encre); margin-bottom:2px;}
+.grilleAbs .quoi{display:block; color:var(--encre-doux); line-height:1.3;}
 [hidden]{display:none!important;}
 </style>
 
@@ -137,8 +150,10 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
        qu'un espace responsable existe. L'accès responsable se fait par un lien
        secret (voir SECRET_DIRECTION plus bas), jamais affiché à l'écran. -->
   <section id="vueAccueil">
-    <div class="choix choix-seule">
-      <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Agent de sécurité</h2><p>Pointer la présence par groupe pendant la tournée.</p></button>
+    <div class="choix">
+      <button class="porte" id="porteAgent"><div class="pict">🛡️</div><h2>Gestionnaires de stagiaires</h2><p>Pointer la présence par groupe pendant la tournée.</p></button>
+      <button class="porte" id="porteDirEtab"><div class="pict">🏫</div><h2>Directeur d'établissement</h2><p>État des absences par groupe.</p></button>
+      <button class="porte" id="porteDirComplexe"><div class="pict">🏢</div><h2>Directeur de complexe</h2><p>État des absences par groupe.</p></button>
     </div>
   </section>
 
@@ -165,6 +180,38 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
       <div id="listeFormateurs"></div>
       <button class="lien-retour" id="btnDeconnexionAgent">← changer d'appareil / se déconnecter</button>
     </div>
+  </section>
+
+  <!-- ============ DIRECTION (consultation seule, codes séparés) ============ -->
+  <section id="vueDirEtab" hidden>
+    <div class="pin" id="ecranPinDirEtab">
+      <h2>Code d'accès</h2>
+      <p class="note">Directeur d'établissement.</p>
+      <div class="pinBoites">
+        <input inputmode="numeric" maxlength="1" class="pcDE">
+        <input inputmode="numeric" maxlength="1" class="pcDE">
+        <input inputmode="numeric" maxlength="1" class="pcDE">
+        <input inputmode="numeric" maxlength="1" class="pcDE">
+      </div>
+      <p class="erreur" id="errPinDirEtab" hidden>Code incorrect.</p>
+      <button class="lien-retour" id="btnRetourDirEtab">← retour</button>
+    </div>
+    <div id="contenuDirEtab" hidden></div>
+  </section>
+  <section id="vueDirComplexe" hidden>
+    <div class="pin" id="ecranPinDirComplexe">
+      <h2>Code d'accès</h2>
+      <p class="note">Directeur de complexe.</p>
+      <div class="pinBoites">
+        <input inputmode="numeric" maxlength="1" class="pcDC">
+        <input inputmode="numeric" maxlength="1" class="pcDC">
+        <input inputmode="numeric" maxlength="1" class="pcDC">
+        <input inputmode="numeric" maxlength="1" class="pcDC">
+      </div>
+      <p class="erreur" id="errPinDirComplexe" hidden>Code incorrect.</p>
+      <button class="lien-retour" id="btnRetourDirComplexe">← retour</button>
+    </div>
+    <div id="contenuDirComplexe" hidden></div>
   </section>
 
   <!-- ============ RESPONSABLE ============ -->
@@ -364,7 +411,7 @@ function dateLongue(d){
 }
 
 /* ------------------------- navigation ------------------------- */
-function vue(n){ ['Accueil','Agent','Admin'].forEach(v=>$('vue'+v).hidden=(v!==n)); }
+function vue(n){ ['Accueil','Agent','DirEtab','DirComplexe','Admin'].forEach(v=>$('vue'+v).hidden=(v!==n)); }
 $('porteAgent').onclick=()=>{ vue('Agent'); ouvrirAgent(); };
 document.querySelectorAll('[data-retour]').forEach(b=>b.onclick=()=>vue('Accueil'));
 
@@ -610,6 +657,232 @@ function rendreSalleDetail(){
       afficherSalles();
     }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
   };
+}
+
+/* ------------------------- DIRECTION (consultation seule) -------------------------
+   Deux portes supplémentaires (demande du 18/09/2026), chacune avec son
+   propre code à 4 chiffres — même contenu pour les deux, juste deux accès
+   séparés. Aucune écriture ici : lecture de pointage/* (jour/créneau),
+   abs/<groupe> et pub/abs (mêmes documents que la plateforme, remplis par
+   le classeur du gestionnaire et par cette application). */
+const CODE_DIR_ETAB='2020', CODE_DIR_COMPLEXE='2030';
+function brancherPin(classe, code, errId, onOk){
+  const PC=[...document.querySelectorAll('.'+classe)];
+  PC.forEach(x=>x.value='');
+  PC.forEach((inp,i)=>{
+    inp.oninput=()=>{
+      inp.value=inp.value.replace(/\D/g,'').slice(0,1);
+      if(inp.value && PC[i+1]) PC[i+1].focus();
+      if(PC.every(x=>x.value)){
+        const saisi=PC.map(x=>x.value).join('');
+        if(saisi===code){ $(errId).hidden=true; onOk(); }
+        else { $(errId).hidden=false; PC.forEach(x=>x.value=''); PC[0].focus(); }
+      }
+    };
+  });
+  if(PC[0]) PC[0].focus();
+}
+$('porteDirEtab').onclick=()=>{
+  vue('DirEtab'); $('ecranPinDirEtab').hidden=false; $('contenuDirEtab').hidden=true;
+  brancherPin('pcDE', CODE_DIR_ETAB, 'errPinDirEtab', async ()=>{
+    $('ecranPinDirEtab').hidden=true; $('contenuDirEtab').hidden=false;
+    await ouvrirFirebase();
+    demarrerVueAbsences('contenuDirEtab');
+  });
+};
+$('porteDirComplexe').onclick=()=>{
+  vue('DirComplexe'); $('ecranPinDirComplexe').hidden=false; $('contenuDirComplexe').hidden=true;
+  brancherPin('pcDC', CODE_DIR_COMPLEXE, 'errPinDirComplexe', async ()=>{
+    $('ecranPinDirComplexe').hidden=true; $('contenuDirComplexe').hidden=false;
+    await ouvrirFirebase();
+    demarrerVueAbsences('contenuDirComplexe');
+  });
+};
+$('btnRetourDirEtab').onclick=()=>vue('Accueil');
+$('btnRetourDirComplexe').onclick=()=>vue('Accueil');
+
+const SEUIL_CONSEIL=50;
+const anneeDeGroupeDir=g=>{ const m=String(g||'').match(/(\d)\d\d\s*$/); return m ? m[1] : '?'; };
+function totalAbsLigne(l){ return (l[3]||[]).reduce((a,b)=>a+(+b||0),0); }
+const fmtHDir=h=>(Math.round(h*10)/10).toString().replace('.',',');
+
+let DIR_CONTENEUR=null, DIR_VUE='jour', DIR_NAV_SEM=0, DIR_GI=null;
+async function demarrerVueAbsences(conteneurId){
+  if(!META) await chargerMeta();
+  DIR_CONTENEUR=conteneurId; DIR_VUE='jour'; DIR_NAV_SEM=0; DIR_GI=null;
+  rendreVueAbsences();
+}
+function rendreVueAbsences(){
+  const box=$(DIR_CONTENEUR); if(!box) return;
+  box.innerHTML=
+    '<div class="jourBandeau" style="text-align:left;padding:16px 18px">'+
+      '<div class="date" style="font-size:18px">État des absences</div>'+
+      '<div class="note" style="margin-top:2px">'+((META.G||[]).length)+' groupes</div></div>'+
+    '<div class="onglets" id="dirOnglets">'+
+      '<button data-v="jour" class="'+(DIR_VUE==='jour'?'on':'')+'">Par jour et créneau</button>'+
+      '<button data-v="groupes" class="'+(DIR_VUE==='groupes'?'on':'')+'">Groupes</button>'+
+      '<button data-v="stag" class="'+(DIR_VUE==='stag'?'on':'')+'">Stagiaires</button></div>'+
+    '<div id="dirContenu"></div>'+
+    '<button class="lien-retour" id="dirRetour" style="margin-top:18px">← retour à l\'accueil</button>';
+  box.querySelectorAll('#dirOnglets button').forEach(b=>b.onclick=()=>{ DIR_VUE=b.dataset.v; rendreVueAbsences(); });
+  $('dirRetour').onclick=()=>vue('Accueil');
+  if(DIR_VUE==='jour') rendreDirJour();
+  else if(DIR_VUE==='groupes') rendreDirGroupes();
+  else rendreDirStagiaires();
+}
+function rendreDirJour(){
+  const host=$('dirContenu'); if(!host) return;
+  if(DIR_GI===null || !META.G[DIR_GI]) DIR_GI = (META.G||[]).length ? 0 : null;
+  if(DIR_GI===null){ host.innerHTML='<p class="videMsg">Aucun groupe publié.</p>'; return; }
+  const gs=[...META.G.keys()].sort((a,b)=>META.G[a][0].localeCompare(META.G[b][0]));
+  const nbSem=Math.max(META.nbSem||0, (META.lundis||[]).length, 1);
+  host.innerHTML=
+    '<select id="dirGrpSel" style="font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre);margin-top:4px">'+
+      gs.map(gi=>'<option value="'+gi+'" '+(gi===DIR_GI?'selected':'')+'>'+META.G[gi][0]+' — '+(META.G[gi][1]||'')+'</option>').join('')+
+    '</select>'+
+    '<div class="chipsRow" id="dirSemRow">'+Array.from({length:nbSem},(_,i)=>
+      '<button class="'+(i===DIR_NAV_SEM?'on':'')+'" data-sem="'+i+'">S'+(i+1)+'</button>').join('')+'</div>'+
+    '<div id="dirGrille"><p class="videMsg">Chargement…</p></div>';
+  $('dirGrpSel').onchange=e=>{ DIR_GI=+e.target.value; rendreDirJour(); };
+  host.querySelectorAll('#dirSemRow button').forEach(b=>b.onclick=()=>{ DIR_NAV_SEM=+b.dataset.sem; rendreDirJour(); });
+  chargerGrilleDir(DIR_GI, DIR_NAV_SEM);
+}
+async function chargerGrilleDir(iG, sem){
+  const zone=$('dirGrille'); if(!zone) return;
+  const ses=(await chargerSemaine(sem)).filter(s=>s[6].includes(iG));
+  const pointage=(await lireDoc('pointage/s'+sem)) || {};
+  let t='<table class="grilleAbs"><tr><th></th>'+CRENEAUX.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+  for(let d=0; d<6; d++){
+    t+='<tr><th class="jr">'+JOURS[d]+'</th>';
+    for(let cr=0; cr<4; cr++){
+      const ici=ses.filter(x=>x[1]===d && x[2]===cr);
+      if(!ici.length){ t+='<td class="vide"></td>'; continue; }
+      const entree=(pointage[d+'_'+cr]||{})[iG];
+      const absents=entree && Array.isArray(entree.absents) ? entree.absents : null;
+      const cls = !entree ? 'enattente' : (absents && absents.length ? 'absent' : 'present');
+      const clicAttr = (absents && absents.length) ? ' data-jour="'+d+'" data-cr="'+cr+'"' : '';
+      const label = !entree ? 'Non relevé' : (absents && absents.length ? absents.length+' absent'+(absents.length>1?'s':'') : 'Tous présents');
+      t+='<td class="'+cls+'"'+clicAttr+'>'+ici.map(s=>{
+        const fad=s[3]===1;
+        const salle = fad ? 'À distance' : (META.S[s[4]] ? 'Salle '+String(META.S[s[4]]).replace(/^S0?/,'') : 'Salle à affecter');
+        return '<span class="qui">'+(META.nomAff[s[0]]||META.F[s[0]]||'')+'</span>'+
+          '<span class="quoi">'+(META.M[s[5]]||'')+' · '+salle+'</span>'+
+          '<span class="quoi" style="font-weight:700;margin-top:3px">'+label+'</span>';
+      }).join('')+'</td>';
+    }
+    t+='</tr>';
+  }
+  zone.innerHTML=t+'</table><div id="dirDetailCreneau" style="margin-top:14px"></div>';
+  zone.querySelectorAll('td.absent').forEach(td=>{
+    td.onclick=async ()=>{
+      const jour=+td.dataset.jour, cr=+td.dataset.cr;
+      const entree=(pointage[jour+'_'+cr]||{})[iG];
+      const absents=entree && Array.isArray(entree.absents) ? entree.absents : [];
+      const sesIci=ses.filter(x=>x[1]===jour && x[2]===cr);
+      const zoneD=$('dirDetailCreneau');
+      zoneD.innerHTML='<p class="videMsg">Chargement…</p>';
+      zoneD.innerHTML=await detailCreneauDirHtml(iG, sesIci, absents);
+    };
+  });
+}
+/* Combien de fois chaque stagiaire absent a déjà manqué CE module précis
+   (pas son total tous modules confondus) : on revisite chaque semaine où
+   ce module a une séance pour ce groupe. */
+async function detailCreneauDirHtml(iG, sesIci, absents){
+  const s0=sesIci[0];
+  const nomModule = s0 ? (META.M[s0[5]]||'') : '';
+  const salle = s0 ? (s0[3]===1 ? 'À distance' : (META.S[s0[4]] ? 'Salle '+String(META.S[s0[4]]).replace(/^S0?/,'') : 'Salle à affecter')) : '';
+  const formateur = s0 ? (META.nomAff[s0[0]]||META.F[s0[0]]||'') : '';
+  const moduleI = s0 ? s0[5] : null;
+  const nomGroupe=META.G[iG][0];
+  const compteModule={};
+  if(moduleI!==null){
+    const nbSem=Math.max(META.nbSem||0, (META.lundis||[]).length, 1);
+    for(let w=0; w<nbSem; w++){
+      const seancesModule=(await chargerSemaine(w)).filter(s=>s[5]===moduleI && s[6].includes(iG));
+      if(!seancesModule.length) continue;
+      const doc=await lireDoc('pointage/s'+w);
+      if(!doc) continue;
+      seancesModule.forEach(s=>{
+        const e=(doc[s[1]+'_'+s[2]]||{})[iG];
+        if(e && Array.isArray(e.absents)) e.absents.forEach(([n,p])=>{
+          const k=normNom(n)+'|'+normNom(p); compteModule[k]=(compteModule[k]||0)+1;
+        });
+      });
+    }
+  }
+  const docAbs=await lireDoc('abs/'+nomGroupe);
+  const liste=(docAbs && docAbs.liste) || [];
+  const lignes=absents.map(([n,p])=>{
+    const row=liste.find(l=>normNom(l[1])===normNom(n) && normNom(l[2])===normNom(p));
+    const fois=compteModule[normNom(n)+'|'+normNom(p)]||1;
+    return {n, p, fois, tot: row ? totalAbsLigne(row) : 0};
+  }).sort((a,b)=>b.tot-a.tot);
+  return '<div class="jourBandeau" style="text-align:left;padding:14px 16px">'+
+    '<div style="font-weight:700">'+nomModule+'</div>'+
+    '<div class="note" style="margin-top:3px">'+salle+' · '+formateur+'</div></div>'+
+    '<div class="cadre-scroll" style="margin-top:10px"><table class="pointage"><tr><th>Stagiaire</th><th>Absences dans ce module</th><th>Cumul à date</th></tr>'+
+    lignes.map(l=>'<tr><td>'+l.n+' '+l.p+'</td><td>'+l.fois+'</td><td>'+fmtHDir(l.tot)+' h</td></tr>').join('')+
+    '</table></div>';
+}
+async function rendreDirGroupes(){
+  const host=$('dirContenu'); if(!host) return;
+  host.innerHTML='<p class="videMsg">Chargement…</p>';
+  const pubAbs=(await lireDoc('pub/abs')) || {sem:[], groupes:[]};
+  const sem=pubAbs.sem||[], groupes=pubAbs.groupes||[];
+  const lignes=[];
+  for(const g of groupes){
+    const doc=await lireDoc('abs/'+g);
+    const liste=(doc && doc.liste) || [];
+    let n=0, h=0, conseil=0;
+    liste.forEach(l=>{ const t=totalAbsLigne(l); n++; h+=t; if(t>SEUIL_CONSEIL) conseil++; });
+    if(n) lignes.push({g, an:anneeDeGroupeDir(g), n, h, conseil});
+  }
+  lignes.sort((a,b)=>(b.h/Math.max(1,b.n))-(a.h/Math.max(1,a.n)));
+  if(host!==$('dirContenu')) return;
+  host.innerHTML = !lignes.length ? '<p class="videMsg">Aucune absence publiée.</p>' :
+    '<div class="cadre-scroll" style="margin-top:12px"><table class="pointage"><tr><th>Rang</th><th>Groupe</th><th>Année</th>'+
+    '<th>Stagiaires</th><th>Total</th><th>Taux</th><th>Conseil</th></tr>'+
+    lignes.map((e,i)=>'<tr'+(e.conseil?' style="background:var(--rouge-doux)"':'')+'><td>'+(i+1)+'</td><td>'+e.g+'</td><td>'+e.an+'</td>'+
+      '<td>'+e.n+'</td><td>'+fmtHDir(e.h)+' h</td><td>'+fmtHDir(e.h/Math.max(1,e.n))+' h</td><td>'+(e.conseil||'0')+'</td></tr>').join('')+
+    '</table></div><p class="note" style="margin-top:10px">'+lignes.length+' groupe'+(lignes.length>1?'s':'')+
+    ', du plus absent au moins absent, sur '+(sem.length||'?')+' semaine'+(sem.length>1?'s':'')+' relevée'+(sem.length>1?'s':'')+
+    '. Au-delà de '+SEUIL_CONSEIL+' h, un stagiaire passe au conseil de discipline.</p>';
+}
+async function rendreDirStagiaires(){
+  const host=$('dirContenu'); if(!host) return;
+  host.innerHTML='<p class="videMsg">Chargement…</p>';
+  const pubAbs=(await lireDoc('pub/abs')) || {sem:[], groupes:[]};
+  const groupes=pubAbs.groupes||[];
+  const tout=[];
+  for(const g of groupes){
+    const doc=await lireDoc('abs/'+g);
+    ((doc && doc.liste) || []).forEach(l=>tout.push(l));
+  }
+  if(host!==$('dirContenu')) return;
+  const gs=[...new Set(tout.map(l=>l[0]))].sort();
+  const render=()=>{
+    const an=$('dirAn').value, grp=$('dirGrpFiltre').value, q=(($('dirQ').value)||'').trim().toUpperCase();
+    const lignes=tout.filter(l=>an==='__ALL__' || anneeDeGroupeDir(l[0])===an)
+                     .filter(l=>grp==='__ALL__' || l[0]===grp)
+                     .filter(l=>!q || ((l[1]||'')+' '+(l[2]||'')).toUpperCase().includes(q))
+                     .map(l=>({grp:l[0], nom:l[1], pre:l[2], tot:totalAbsLigne(l)}))
+                     .sort((a,b)=>b.tot-a.tot);
+    $('dirStagListe').innerHTML = !lignes.length ? '<p class="videMsg">Aucun stagiaire.</p>' :
+      '<div class="cadre-scroll" style="margin-top:12px"><table class="pointage"><tr><th>Rang</th><th>Stagiaire</th><th>Groupe</th><th>Total</th></tr>'+
+      lignes.map((l,i)=>'<tr'+(l.tot>SEUIL_CONSEIL?' style="background:var(--rouge-doux)"':'')+'><td>'+(i+1)+'</td><td>'+l.nom+' '+l.pre+'</td><td>'+l.grp+'</td><td>'+fmtHDir(l.tot)+' h</td></tr>').join('')+
+      '</table></div><p class="note" style="margin-top:10px">'+lignes.length+' stagiaire'+(lignes.length>1?'s':'')+'. Au-delà de '+SEUIL_CONSEIL+' h, conseil de discipline.</p>';
+  };
+  host.innerHTML=
+    '<div class="chipsRow" style="overflow:visible;flex-wrap:wrap">'+
+      '<select id="dirAn" style="font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre)">'+
+        '<option value="__ALL__">Toutes années</option><option value="1">1ʳᵉ année</option><option value="2">2ᵉ année</option><option value="3">3ᵉ année</option></select>'+
+      '<select id="dirGrpFiltre" style="font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre)">'+
+        '<option value="__ALL__">Tous les groupes</option>'+gs.map(g=>'<option value="'+g+'">'+g+'</option>').join('')+'</select>'+
+      '<input type="search" id="dirQ" placeholder="Chercher un stagiaire…" style="font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre);min-width:180px">'+
+    '</div><div id="dirStagListe"></div>';
+  $('dirAn').onchange=render; $('dirGrpFiltre').onchange=render; $('dirQ').oninput=render;
+  render();
 }
 
 /* ------------------------- RESPONSABLE ------------------------- */
