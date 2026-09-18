@@ -140,6 +140,20 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
   border:1px solid var(--ligne); background:var(--carte); color:var(--encre); cursor:pointer;}
 .gchip:hover{border-color:var(--bleu);}
 .gchip.actif{background:var(--bleu); border-color:var(--bleu); color:#fff; font-weight:600;}
+/* Vue « par jour et créneau » (demande du 18/09/2026) : carte(s) de
+   résultat, pastille d'état et puces de stagiaires absents — plus soigné
+   qu'un tableau brut. */
+.grilleAbsJour{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-top:14px;}
+.carteAbsJour{background:var(--carte); border:1px solid var(--ligne); border-radius:14px; padding:14px 16px; box-shadow:var(--ombre);}
+.carteAbsJour .entete{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.carteAbsJour .grp{font-family:'Archivo',sans-serif; font-weight:800; font-size:16px;}
+.pastilleEtat{display:inline-block; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:999px; white-space:nowrap;}
+.pastilleEtat.ok{background:var(--vert-doux); color:var(--vert);}
+.pastilleEtat.non{background:var(--alerte-doux); color:var(--alerte);}
+.carteAbsJour .ligneForm{margin-top:8px; font-size:13px; color:var(--encre-doux); display:flex; align-items:center; gap:6px;}
+.carteAbsJour .ligneForm .ic{font-size:13px;}
+.chipsAbsents{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+.chipAbsent{background:var(--alerte-doux); color:var(--alerte); font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px;}
 .efm{width:100%; border-collapse:collapse; margin-top:14px; font-size:13.5px;}
 .efm th{text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em;
   text-transform:uppercase; color:var(--encre-doux); font-weight:500; padding:0 10px 8px; border-bottom:1px solid var(--ligne);}
@@ -424,8 +438,8 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
     <!-- Deux sous-pages : le relevé d'un côté, l'injection du fichier de l'autre. -->
     <div class="onglets noprint">
       <button data-sous="etat" class="on">Groupes</button>
-      <button data-sous="stag">Stagiaires</button>
       <button data-sous="jour">Par jour et créneau</button>
+      <button data-sous="stag">Stagiaires</button>
       <button data-sous="inj">Injection du fichier</button>
     </div>
     <!-- Sous-page 1 : les groupes, du plus absent au moins absent, avec les
@@ -848,7 +862,9 @@ function navJourCreneauHtml(etat, nbSem){
   const semB=Array.from({length:Math.max(nbSem,1)},(_,i)=>
     `<button class="gchip navS ${i===etat.sem?'actif':''}" data-sem="${i}">S${i+1}</button>`).join('');
   const jourB=JOURS.map((j,i)=>`<button class="gchip navJ ${etat.jour===i?'actif':''}" data-jour="${i}">${j}</button>`).join('');
-  const crB=CRENEAUX.map((c,i)=>`<button class="gchip navC ${etat.creneau===i?'actif':''}" data-cr="${i}">${i+1}ᵉ créneau</button>`).join('');
+  /* Les horaires plutôt que « 1ᵉ créneau » (demande du 18/09/2026) : plus
+     parlant qu'un simple rang. */
+  const crB=CRENEAUX.map((c,i)=>`<button class="gchip navC ${etat.creneau===i?'actif':''}" data-cr="${i}">${c}</button>`).join('');
   return '<div class="mesgroupes">'+semB+'</div><div class="mesgroupes">'+jourB+'</div><div class="mesgroupes">'+crB+'</div>';
 }
 function brancherNavJourCreneau(box, etat, onChange){
@@ -876,9 +892,14 @@ async function detailAbsJourStagiaire(){
   const entree=cases[profil.iG];
   if(!entree){ cle.innerHTML='<div class="vide-msg">Aucun cours relevé pour vous sur ce créneau.</div>'; return; }
   const moi=Array.isArray(entree.absents) && entree.absents.some(([n,p])=>norm(n)===norm(profil.nom) && norm(p)===norm(profil.prenom));
-  cle.innerHTML='<div class="resume"><div class="bloc"><b style="color:'+(moi?'var(--alerte)':'var(--vert)')+'">'+
-    (moi?'Absent':'Présent')+'</b><span>relevé sur le terrain</span></div>'+
-    '<div class="bloc"><b>'+(D.nomAff[entree.fi]||(D.F||[])[entree.fi]||'—')+'</b><span>formateur</span></div></div>';
+  cle.innerHTML=carteEtatHtml(moi, D.nomAff[entree.fi]||(D.F||[])[entree.fi]||'—');
+}
+/* Carte de résultat pour UNE case (stagiaire) — pastille d'état + nom du
+   formateur, plus posée qu'une ligne de texte (demande du 18/09/2026). */
+function carteEtatHtml(absent, nomForm){
+  return '<div class="carteAbsJour">'+
+    '<div class="pastilleEtat '+(absent?'non':'ok')+'">'+(absent?'✗ Absent':'✓ Présent')+'</div>'+
+    '<div class="ligneForm"><span class="ic">👤</span>'+nomForm+'</div></div>';
 }
 function afficherAbs(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
@@ -889,8 +910,8 @@ function afficherAbs(){
     $('titreEmploi').textContent='Mes absences';
     $('metaEmploi').textContent='Groupe '+profil.groupe;
     const onglets='<div class="onglets noprint" style="margin-top:10px">'+
-      '<button id="absVueSem" class="'+(ABS_VUE_STAG==='semaine'?'on':'')+'">Par semaine</button>'+
-      '<button id="absVueJour" class="'+(ABS_VUE_STAG==='jour'?'on':'')+'">Par jour et créneau</button></div>';
+      '<button id="absVueJour" class="'+(ABS_VUE_STAG==='jour'?'on':'')+'">Par jour et créneau</button>'+
+      '<button id="absVueSem" class="'+(ABS_VUE_STAG==='semaine'?'on':'')+'">Par semaine</button></div>';
     /* Vue « par jour et créneau » (demande du 18/09/2026) : qui a relevé
        l'absence (l'agent, via pointage/*), pas le classeur du gestionnaire —
        disponible même si aucun classeur ABSENCES n'a encore été publié. */
@@ -946,8 +967,8 @@ function afficherAbs(){
   const code=D.G[gAbs][0], liste=lignesAbs(code);
   $('titreEmploi').textContent='Absences — '+code;
   const ongletsF='<div class="onglets noprint" style="margin-top:10px">'+
-    '<button id="absVueSemF" class="'+(ABS_VUE_F==='semaine'?'on':'')+'">Par semaine</button>'+
-    '<button id="absVueJourF" class="'+(ABS_VUE_F==='jour'?'on':'')+'">Par jour et créneau</button></div>';
+    '<button id="absVueJourF" class="'+(ABS_VUE_F==='jour'?'on':'')+'">Par jour et créneau</button>'+
+    '<button id="absVueSemF" class="'+(ABS_VUE_F==='semaine'?'on':'')+'">Par semaine</button></div>';
   if(ABS_VUE_F==='jour'){
     $('metaEmploi').textContent=D.G[gAbs][1]||'';
     $('vueAbs').innerHTML=ongletsF+'<div id="detailAbsJourF" style="margin-top:14px"></div>';
@@ -1016,10 +1037,11 @@ async function detailAbsJourFormateur(iG){
   const entree=cases[iG];
   if(!entree){ cle.innerHTML='<div class="vide-msg">Aucun cours relevé pour ce groupe sur ce créneau.</div>'; return; }
   const absents=Array.isArray(entree.absents)?entree.absents:[];
-  cle.innerHTML='<div class="resume"><div class="bloc"><b>'+absents.length+'</b><span>stagiaire'+(absents.length>1?'s':'')+' absent'+(absents.length>1?'s':'')+'</span></div></div>'+
-    (absents.length? '<div class="cadre-abs" style="margin-top:10px"><table class="abs"><tr><th class="qui">Stagiaire</th></tr>'+
-      absents.map(([n,p])=>'<tr><td class="qui">'+n+' '+p+'</td></tr>').join('')+'</table></div>'
-      : '<p class="note" style="margin-top:10px">Tous les stagiaires présents sur ce créneau.</p>');
+  cle.innerHTML='<div class="carteAbsJour">'+
+    '<div class="pastilleEtat '+(absents.length?'non':'ok')+'">'+
+      (absents.length? absents.length+' absent'+(absents.length>1?'s':'') : '✓ Tous présents')+'</div>'+
+    (absents.length? '<div class="chipsAbsents">'+absents.map(([n,p])=>'<span class="chipAbsent">'+n+' '+p+'</span>').join('')+'</div>' : '')+
+    '</div>';
 }
 
 /* ---- Dates des examens de fin de module ---- */
@@ -1524,14 +1546,18 @@ async function afficherAbsJourAdmin(){
   cle.innerHTML='<div class="resume">'+
     '<div class="bloc"><b>'+gis.length+'</b><span>groupe'+(gis.length>1?'s':'')+' relevé'+(gis.length>1?'s':'')+'</span></div>'+
     '<div class="bloc"><b>'+totalAbsents+'</b><span>stagiaire'+(totalAbsents>1?'s':'')+' absent'+(totalAbsents>1?'s':'')+'</span></div></div>'+
-    '<div class="cadre-abs" style="margin-top:10px"><table class="abs"><tr><th class="qui">Groupe</th><th>Formateur</th><th>Stagiaires absents</th></tr>'+
+    '<div class="grilleAbsJour">'+
     gis.map(gi=>{
       const e=cases[gi];
       const absents=Array.isArray(e.absents)?e.absents:[];
-      return '<tr><td class="qui">'+D.G[gi][0]+'</td><td>'+(D.nomAff[e.fi]||(D.F||[])[e.fi]||'')+'</td>'+
-        '<td>'+(absents.length? absents.map(([n,p])=>n+' '+p).join(', ') : '<span class="note">tous présents</span>')+'</td></tr>';
+      return '<div class="carteAbsJour">'+
+        '<div class="entete"><span class="grp">'+D.G[gi][0]+'</span>'+
+        '<span class="pastilleEtat '+(absents.length?'non':'ok')+'">'+(absents.length? absents.length+' absent'+(absents.length>1?'s':'') : '✓ Tous présents')+'</span></div>'+
+        '<div class="ligneForm"><span class="ic">👤</span>'+(D.nomAff[e.fi]||(D.F||[])[e.fi]||'')+'</div>'+
+        (absents.length? '<div class="chipsAbsents">'+absents.map(([n,p])=>'<span class="chipAbsent">'+n+' '+p+'</span>').join('')+'</div>' : '')+
+        '</div>';
     }).join('')+
-    '</table></div>';
+    '</div>';
 }
 
 /* ------------------------- demandes administratives -------------------
