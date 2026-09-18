@@ -141,6 +141,9 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
 .seance.present .etatSeance{color:var(--vert);}
 .seance.absent .etatSeance{color:var(--alerte);}
 .seance.enattente .etatSeance{color:var(--encre-doux); font-weight:600;}
+.clicAbs{cursor:pointer;}
+.clicAbs:hover .seance.absent{filter:brightness(.96);}
+.clicAbs .etatSeance::after{content:' ▾'; font-weight:400;}
 /* onglets et liste des groupes du formateur */
 .onglets{display:flex; gap:4px; margin:16px 0 0; border-bottom:1px solid var(--ligne);}
 .onglets button{font:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; cursor:pointer;
@@ -1075,11 +1078,48 @@ async function grilleAbsSemaine(iG, sem){
       const ici=ses.filter(x=>x[1]===d && x[2]===cr);
       if(!ici.length){ t+='<td class="vide"></td>'; continue; }
       const entree=(pointage[d+'_'+cr]||{})[iG];
-      t+='<td>'+ici.map(s=>contenuAbs(s, entree)).join('')+'</td>';
+      const clic=entree && Array.isArray(entree.absents) && entree.absents.length>0;
+      t+=`<td${clic?` class="clicAbs" data-jour="${d}" data-cr="${cr}"`:''}>`+ici.map(s=>contenuAbs(s, entree)).join('')+'</td>';
     }
     t+='</tr>';
   }
-  return '<div class="cadre-grille"><table class="grille">'+t+'</table></div>';
+  return {
+    html:'<div class="cadre-grille"><table class="grille">'+t+'</table></div>'+
+      '<div id="detailCreneauSel" style="margin-top:14px"></div>',
+    pointage
+  };
+}
+/* Clic sur un créneau en rouge (demande du 18/09/2026, choisie plutôt que
+   d'entasser jusqu'à 25 noms dans la case) : la liste complète s'affiche
+   EN BAS, sous la grille — nom, prénom, et cumul d'absence à date lu dans
+   abs/<groupe> (même total que « État des absences »). */
+async function detailCreneauAbsHtml(iG, absents){
+  const nomGroupe=D.G[iG][0];
+  let doc;
+  try{ doc=await db.doc('abs/'+nomGroupe).get(); }catch(e){ doc=null; }
+  const liste=(doc && doc.exists && doc.data && doc.data.liste) || [];
+  const lignes=absents.map(([n,p])=>{
+    const row=liste.find(l=>norm(l[1])===norm(n) && norm(l[2])===norm(p));
+    return {n, p, tot: row? totalAbs(row) : 0};
+  }).sort((a,b)=>b.tot-a.tot);
+  return '<div class="carteAbsJour"><div class="entete"><span class="grp">Stagiaires absents sur ce créneau</span></div>'+
+    '<div class="cadre-abs" style="margin-top:8px"><table class="abs"><tr><th class="qui">Stagiaire</th><th>Cumul d\'absence à date</th></tr>'+
+    lignes.map(l=>'<tr><td class="qui">'+l.n+' '+l.p+'</td><td class="tot">'+fmtH(l.tot)+' h</td></tr>').join('')+
+    '</table></div></div>';
+}
+function brancherClicsGrilleAbs(box, iG, pointage){
+  box.querySelectorAll('.clicAbs').forEach(td=>{
+    td.onclick=async ()=>{
+      const jour=+td.dataset.jour, cr=+td.dataset.cr;
+      const entree=(pointage[jour+'_'+cr]||{})[iG];
+      const absents=entree && Array.isArray(entree.absents) ? entree.absents : [];
+      const zone=box.querySelector('#detailCreneauSel');
+      if(!zone) return;
+      zone.innerHTML='<p class="note">Chargement…</p>';
+      zone.innerHTML=await detailCreneauAbsHtml(iG, absents);
+      zone.scrollIntoView({behavior:'smooth', block:'nearest'});
+    };
+  });
 }
 async function detailAbsJourFormateur(iG){
   const box=$('detailAbsJourF'); if(!box) return;
@@ -1087,9 +1127,10 @@ async function detailAbsJourFormateur(iG){
   box.innerHTML=navSemaineHtml(ABS_NAV_F, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
   brancherNavSemaine(box, ABS_NAV_F, ()=>detailAbsJourFormateur(iG));
   const cle=box.querySelector('.zoneRes');
-  const html=await grilleAbsSemaine(iG, ABS_NAV_F.sem);
+  const {html, pointage}=await grilleAbsSemaine(iG, ABS_NAV_F.sem);
   if(box!==$('detailAbsJourF')) return;
   cle.innerHTML=html;
+  brancherClicsGrilleAbs(cle, iG, pointage);
 }
 
 /* ---- Dates des examens de fin de module ---- */
@@ -1595,9 +1636,10 @@ async function afficherAbsJourAdmin(){
   $('absJourAdminGrp').onchange=e=>{ ABS_JOUR_ADMIN_GI=+e.target.value; afficherAbsJourAdmin(); };
   brancherNavSemaine(box, ABS_NAV_ADMIN, afficherAbsJourAdmin);
   const cle=box.querySelector('.zoneRes');
-  const html=await grilleAbsSemaine(ABS_JOUR_ADMIN_GI, ABS_NAV_ADMIN.sem);
+  const {html, pointage}=await grilleAbsSemaine(ABS_JOUR_ADMIN_GI, ABS_NAV_ADMIN.sem);
   if(box!==$('zoneJourAbs')) return;
   cle.innerHTML=html;
+  brancherClicsGrilleAbs(cle, ABS_JOUR_ADMIN_GI, pointage);
 }
 
 /* ------------------------- demandes administratives -------------------
