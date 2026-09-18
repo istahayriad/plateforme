@@ -509,7 +509,11 @@ async function afficherSalleDetail(){
     const roster=ROSTER_GROUPE[nomGroupe]||[];
     const sauve=AGENT_SALLE_MARQUES[gi];
     const absentsIdx=new Set();
-    (sauve && sauve.absents || []).forEach(([nom,prenom])=>{
+    /* Un pointage enregistré AVANT cette correction (18/09/2026) garde un
+       simple chiffre dans `absents`, pas une liste de noms : Array.isArray
+       s'en protège, sinon .forEach plantait et bloquait l'ouverture de la
+       salle (constaté avec l'utilisateur, salle restée sur l'ancien format). */
+    (Array.isArray(sauve && sauve.absents) ? sauve.absents : []).forEach(([nom,prenom])=>{
       const i=roster.findIndex(([n,p])=>normNom(n)===normNom(nom) && normNom(p)===normNom(prenom));
       if(i>=0) absentsIdx.add(i);
     });
@@ -591,7 +595,7 @@ function rendreSalleDetail(){
            réajouter systématiquement : une revalidation (correction, ou
            simple réouverture de la salle) ne doit ni dupliquer les heures
            déjà comptées ni oublier de retirer un nom décoché. */
-        const avant=(p[cle][gi] && p[cle][gi].absents) || [];
+        const avant=Array.isArray(p[cle][gi] && p[cle][gi].absents) ? p[cle][gi].absents : [];
         const cleDe=([n,pr])=>normNom(n)+'|'+normNom(pr);
         const clesAvant=new Set(avant.map(cleDe));
         const clesApres=new Set(paires.map(cleDe));
