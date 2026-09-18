@@ -1091,23 +1091,55 @@ async function grilleAbsSemaine(iG, sem){
 }
 /* Clic sur un créneau en rouge (demande du 18/09/2026, choisie plutôt que
    d'entasser jusqu'à 25 noms dans la case) : la liste complète s'affiche
-   EN BAS, sous la grille — nom, prénom, et cumul d'absence à date lu dans
-   abs/<groupe> (même total que « État des absences »). */
-async function detailCreneauAbsHtml(iG, absents){
+   EN BAS, sous la grille — module/salle/formateur de la séance, puis par
+   stagiaire : combien de fois il a manqué CE module précisément, et son
+   cumul d'absence à date tous modules confondus (abs/<groupe>). */
+async function detailCreneauAbsHtml(iG, sem, jour, cr, absents){
+  const ses=(D.semaines[sem]||[]).filter(s=>s[1]===jour && s[2]===cr && s[6].includes(iG));
+  const s0=ses[0];
+  const moduleI = s0 ? s0[5] : null;
+  const nomModule = s0 ? (D.M[s0[5]]||'') : '';
+  const salle = s0 ? (s0[3]===1 ? 'À distance' : (D.S[s0[4]] ? 'Salle '+D.S[s0[4]].replace(/^S0?/,'') : 'Salle à affecter')) : '';
+  const formateur = s0 ? (D.nomAff[s0[0]]||(D.F||[])[s0[0]]||'') : '';
   const nomGroupe=D.G[iG][0];
-  let doc;
-  try{ doc=await db.doc('abs/'+nomGroupe).get(); }catch(e){ doc=null; }
-  const liste=(doc && doc.exists && doc.data && doc.data.liste) || [];
+  /* combien de fois CE module a été manqué : on revisite chaque semaine où
+     ce module a une séance pour ce groupe, on relit son pointage, on
+     compte les occurrences de chaque stagiaire dans `absents`. */
+  const compteModule={};                             // "NOM|PRENOM" -> nombre de fois
+  if(moduleI!==null){
+    for(let w=0; w<(D.semaines||[]).length; w++){
+      const seancesModule=(D.semaines[w]||[]).filter(s=>s[5]===moduleI && s[6].includes(iG));
+      if(!seancesModule.length) continue;
+      let doc;
+      try{ doc=await db.doc('pointage/s'+w).get(); }catch(e){ continue; }
+      if(!doc || !doc.exists || !doc.data) continue;
+      seancesModule.forEach(s=>{
+        const entree=(doc.data[s[1]+'_'+s[2]]||{})[iG];
+        if(entree && Array.isArray(entree.absents)) entree.absents.forEach(([n,p])=>{
+          const k=norm(n)+'|'+norm(p); compteModule[k]=(compteModule[k]||0)+1;
+        });
+      });
+    }
+  }
+  let docAbs;
+  try{ docAbs=await db.doc('abs/'+nomGroupe).get(); }catch(e){ docAbs=null; }
+  const liste=(docAbs && docAbs.exists && docAbs.data && docAbs.data.liste) || [];
   const lignes=absents.map(([n,p])=>{
     const row=liste.find(l=>norm(l[1])===norm(n) && norm(l[2])===norm(p));
-    return {n, p, tot: row? totalAbs(row) : 0};
+    const fois=compteModule[norm(n)+'|'+norm(p)]||1;  // au moins cette fois-ci
+    return {n, p, fois, tot: row? totalAbs(row) : 0};
   }).sort((a,b)=>b.tot-a.tot);
-  return '<div class="carteAbsJour"><div class="entete"><span class="grp">Stagiaires absents sur ce créneau</span></div>'+
-    '<div class="cadre-abs" style="margin-top:8px"><table class="abs"><tr><th class="qui">Stagiaire</th><th>Cumul d\'absence à date</th></tr>'+
-    lignes.map(l=>'<tr><td class="qui">'+l.n+' '+l.p+'</td><td class="tot">'+fmtH(l.tot)+' h</td></tr>').join('')+
+  return '<div class="carteAbsJour">'+
+    '<div class="entete"><span class="grp">Stagiaires absents sur ce créneau</span></div>'+
+    '<div class="ligneForm"><span class="ic">📘</span>'+nomModule+'</div>'+
+    '<div class="ligneForm"><span class="ic">📍</span>'+salle+'</div>'+
+    '<div class="ligneForm"><span class="ic">👤</span>'+formateur+'</div>'+
+    '<div class="cadre-abs" style="margin-top:10px"><table class="abs"><tr><th class="qui">Stagiaire</th>'+
+    '<th>Absences dans ce module</th><th>Cumul d\'absence à date</th></tr>'+
+    lignes.map(l=>'<tr><td class="qui">'+l.n+' '+l.p+'</td><td class="tot">'+l.fois+'</td><td class="tot">'+fmtH(l.tot)+' h</td></tr>').join('')+
     '</table></div></div>';
 }
-function brancherClicsGrilleAbs(box, iG, pointage){
+function brancherClicsGrilleAbs(box, iG, sem, pointage){
   box.querySelectorAll('.clicAbs').forEach(td=>{
     td.onclick=async ()=>{
       const jour=+td.dataset.jour, cr=+td.dataset.cr;
@@ -1116,7 +1148,7 @@ function brancherClicsGrilleAbs(box, iG, pointage){
       const zone=box.querySelector('#detailCreneauSel');
       if(!zone) return;
       zone.innerHTML='<p class="note">Chargement…</p>';
-      zone.innerHTML=await detailCreneauAbsHtml(iG, absents);
+      zone.innerHTML=await detailCreneauAbsHtml(iG, sem, jour, cr, absents);
       zone.scrollIntoView({behavior:'smooth', block:'nearest'});
     };
   });
@@ -1130,7 +1162,7 @@ async function detailAbsJourFormateur(iG){
   const {html, pointage}=await grilleAbsSemaine(iG, ABS_NAV_F.sem);
   if(box!==$('detailAbsJourF')) return;
   cle.innerHTML=html;
-  brancherClicsGrilleAbs(cle, iG, pointage);
+  brancherClicsGrilleAbs(cle, iG, ABS_NAV_F.sem, pointage);
 }
 
 /* ---- Dates des examens de fin de module ---- */
@@ -1639,7 +1671,7 @@ async function afficherAbsJourAdmin(){
   const {html, pointage}=await grilleAbsSemaine(ABS_JOUR_ADMIN_GI, ABS_NAV_ADMIN.sem);
   if(box!==$('zoneJourAbs')) return;
   cle.innerHTML=html;
-  brancherClicsGrilleAbs(cle, ABS_JOUR_ADMIN_GI, pointage);
+  brancherClicsGrilleAbs(cle, ABS_JOUR_ADMIN_GI, ABS_NAV_ADMIN.sem, pointage);
 }
 
 /* ------------------------- demandes administratives -------------------
