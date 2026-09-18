@@ -827,6 +827,44 @@ function tauxDe(tot, iG, nbSem){
   const hg=heuresGroupe(iG, nbSem);
   return hg>0 ? Math.min(100, tot/hg*100) : null;
 }
+let ABS_VUE_STAG='semaine';   // bascule de « Mes absences » (stagiaire) : 'semaine' ou 'jour'
+/* Détail jour/créneau + formateur d'une absence (demande du 18/09/2026) :
+   source différente de « Par semaine » — pas le classeur ABSENCES du
+   gestionnaire, mais le relevé de l'agent de sécurité (collection
+   pointage/*, écrite par l'appli Suivi d'absence sur le même projet
+   Firebase). Un document par semaine ({"jour_créneau": {iGroupe: {etat,
+   absents:[[nom,prénom],...], fi}}}) — on les parcourt tous et on ne garde
+   que les cases où CE stagiaire apparaît dans `absents` pour son groupe. */
+async function detailAbsJourStagiaire(){
+  const box=$('detailAbsJour'); if(!box) return;
+  const nbSemaines=(D.semaines||[]).length;
+  const lignes=[];
+  for(let w=0; w<nbSemaines; w++){
+    let doc;
+    try{ doc=await db.doc('pointage/s'+w).get(); }catch(e){ continue; }
+    if(!doc || !doc.exists || !doc.data) continue;
+    const pointage=doc.data;
+    Object.keys(pointage).forEach(cle=>{
+      const m=cle.match(/^(\d+)_(\d+)$/); if(!m) return;
+      const entree=pointage[cle] && pointage[cle][profil.iG];
+      if(!entree || !Array.isArray(entree.absents)) return;
+      const moi=entree.absents.some(([n,p])=>norm(n)===norm(profil.nom) && norm(p)===norm(profil.prenom));
+      if(moi) lignes.push({semaine:w, jour:+m[1], creneau:+m[2], fi:entree.fi});
+    });
+  }
+  if(box!==$('detailAbsJour')) return;               // la page a changé entre-temps
+  lignes.sort((a,b)=>a.semaine-b.semaine || a.jour-b.jour || a.creneau-b.creneau);
+  if(!lignes.length){
+    box.innerHTML='<div class="vide-msg">Aucune absence relevée par jour et créneau pour l\'instant.</div>';
+    return;
+  }
+  box.innerHTML='<div class="cadre-abs"><table class="abs"><tr><th class="qui">Semaine</th>'+
+    '<th>Jour</th><th>Créneau</th><th>Formateur</th></tr>'+
+    lignes.map(l=>'<tr><td class="qui">S'+(l.semaine+1)+'</td><td>'+(JOURS[l.jour]||'')+'</td>'+
+      '<td>'+(CRENEAUX[l.creneau]||'')+'</td><td>'+(D.nomAff[l.fi]||(D.F||[])[l.fi]||'')+'</td></tr>').join('')+
+    '</table></div><p class="note" style="margin-top:10px">'+lignes.length+' absence'+(lignes.length>1?'s':'')+
+    ' relevée'+(lignes.length>1?'s':'')+' sur le terrain, tous créneaux confondus.</p>';
+}
 function afficherAbs(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
   $('vueEfm').hidden=true; $('btnImp').hidden=true; $('vueAbs').hidden=false;
@@ -834,20 +872,35 @@ function afficherAbs(){
   if(profil.type==='S'){                            // ---- le stagiaire ne voit que lui ----
     $('mesGroupes').hidden=true;
     $('titreEmploi').textContent='Mes absences';
+    $('metaEmploi').textContent='Groupe '+profil.groupe;
+    const onglets='<div class="onglets noprint" style="margin-top:10px">'+
+      '<button id="absVueSem" class="'+(ABS_VUE_STAG==='semaine'?'on':'')+'">Par semaine</button>'+
+      '<button id="absVueJour" class="'+(ABS_VUE_STAG==='jour'?'on':'')+'">Par jour et créneau</button></div>';
+    /* Vue « par jour et créneau » (demande du 18/09/2026) : qui a relevé
+       l'absence (l'agent, via pointage/*), pas le classeur du gestionnaire —
+       disponible même si aucun classeur ABSENCES n'a encore été publié. */
+    if(ABS_VUE_STAG==='jour'){
+      $('vueAbs').innerHTML=onglets+'<div id="detailAbsJour" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+      $('absVueSem').onclick=()=>{ ABS_VUE_STAG='semaine'; afficherAbs(); };
+      $('absVueJour').onclick=()=>{ ABS_VUE_STAG='jour'; afficherAbs(); };
+      detailAbsJourStagiaire();
+      return;
+    }
     const l=(D.abs||[]).find(x=>norm(x[0])===norm(profil.groupe) &&
               norm(x[1]+' '+x[2])===norm(profil.libelle));
     if(!nb || !l){
-      $('metaEmploi').textContent='Groupe '+profil.groupe;
-      $('vueAbs').innerHTML='<div class="vide-msg">Aucun relevé d\'absence n\'a encore été publié'+
+      $('vueAbs').innerHTML=onglets+'<div class="vide-msg">Aucun relevé d\'absence n\'a encore été publié'+
         ' pour votre groupe. Il apparaîtra ici dès que le service planning l\'aura déposé.</div>';
+      $('absVueSem').onclick=()=>{ ABS_VUE_STAG='semaine'; afficherAbs(); };
+      $('absVueJour').onclick=()=>{ ABS_VUE_STAG='jour'; afficherAbs(); };
       return;
     }
     const tot=totalAbs(l), t=tauxDe(tot, profil.iG, nb), hg=heuresGroupe(profil.iG, nb);
     $('metaEmploi').textContent='Groupe '+profil.groupe+' · relevé sur '+nb+' semaine'+(nb>1?'s':'');
     const cells=sem.map((s,i)=>{ const v=+(l[3]||[])[i]||0;
       return '<td class="sem'+(v?' plein':'')+'">'+(v? fmtH(v) : '·')+'</td>'; }).join('');
-    $('vueAbs').innerHTML=
-      '<div class="resume">'+
+    $('vueAbs').innerHTML=onglets+
+      '<div class="resume" style="margin-top:14px">'+
         '<div class="bloc"><b>'+fmtH(tot)+' h</b><span>absences cumulées</span></div>'+
         '<div class="bloc"><b>'+(t===null?'—':t.toFixed(1).replace('.',',')+' %')+'</b><span>taux d\'absence</span></div>'+
         '<div class="bloc"><b>'+fmtH(hg)+' h</b><span>heures programmées</span></div>'+
@@ -860,6 +913,8 @@ function afficherAbs(){
       '<div class="cadre-abs"><table class="abs"><tr><th class="qui">Semaine</th>'+
         sem.map(s=>'<th>'+s+'</th>').join('')+'<th>Total</th></tr>'+
         '<tr><td class="qui">Heures d\'absence</td>'+cells+'<td class="tot">'+fmtH(tot)+'</td></tr></table></div>';
+    $('absVueSem').onclick=()=>{ ABS_VUE_STAG='semaine'; afficherAbs(); };
+    $('absVueJour').onclick=()=>{ ABS_VUE_STAG='jour'; afficherAbs(); };
     majGlisser($('vueAbs'));
     return;
   }
@@ -1708,7 +1763,8 @@ async function connexionStagiaire(){
 
 
   const iG=D.G.findIndex(g=>g[0]===grp);
-  profil={type:'S', iG, groupe:grp, libelle:moi ? (moi[0]+' '+moi[1]).trim() : grp};
+  profil={type:'S', iG, groupe:grp, libelle:moi ? (moi[0]+' '+moi[1]).trim() : grp,
+          nom: moi?moi[0]:'', prenom: moi?moi[1]:''};
   cible={type:'S', iG, groupe:grp, libelle:profil.libelle}; onglet='moi';
   document.querySelectorAll('#onglets button').forEach(b=>b.classList.toggle('on', b.dataset.onglet==='moi'));
   semaine=0; erreur('errStag',null); afficherEmploi();
