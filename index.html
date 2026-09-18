@@ -865,58 +865,80 @@ function tauxDe(tot, iG, nbSem){
 }
 let ABS_VUE_STAG='semaine';   // bascule de « Mes absences » (stagiaire) : 'semaine' ou 'jour'
 let ABS_VUE_F='semaine';      // bascule des « Absences » du formateur
-/* Détail jour/créneau + formateur d'une absence (demande du 18/09/2026) :
-   source différente de « Par semaine » — pas le classeur ABSENCES du
+/* Détail jour/créneau d'une absence (demande du 18/09/2026) : source
+   différente de « Par semaine » — pas le classeur ABSENCES du
    gestionnaire, mais le relevé de l'agent de sécurité (collection
    pointage/*, écrite par l'appli Suivi d'absence sur le même projet
    Firebase). Un document par semaine ({"jour_créneau": {iGroupe: {etat,
-   absents:[[nom,prénom],...], fi}}}).
-   Même forme que l'espace responsable de Suivi d'absence (pastilles
-   semaine, onglets jour, onglets créneau — captures d'écran du 18/09) :
-   `navJourCreneauHtml`/`brancherNavJourCreneau` sont réutilisées partout
-   (stagiaire, formateur, gestionnaire/administrateur). */
-function navJourCreneauHtml(etat, nbSem){
-  const semB=Array.from({length:Math.max(nbSem,1)},(_,i)=>
-    `<button class="gchip navS ${i===etat.sem?'actif':''}" data-sem="${i}">S${i+1}</button>`).join('');
-  const jourB=JOURS.map((j,i)=>`<button class="gchip navJ ${etat.jour===i?'actif':''}" data-jour="${i}">${j}</button>`).join('');
-  /* Les horaires plutôt que « 1ᵉ créneau » (demande du 18/09/2026) : plus
-     parlant qu'un simple rang. */
-  const crB=CRENEAUX.map((c,i)=>`<button class="gchip navC ${etat.creneau===i?'actif':''}" data-cr="${i}">${c}</button>`).join('');
-  return '<div class="mesgroupes">'+semB+'</div><div class="mesgroupes">'+jourB+'</div><div class="mesgroupes">'+crB+'</div>';
+   absents:[[nom,prénom],...], fi}}}). Grille hebdomadaire (même forme que
+   « Mon emploi ») partout — stagiaire, formateur, gestionnaire/
+   administrateur — via `navSemaineHtml`/`brancherNavSemaine` communes. */
+let ABS_NAV_STAG={sem:0};
+/* Une case de la grille du stagiaire : verte s'il est présent, rouge s'il
+   est relevé absent — avec, dans la case, le nombre de fois où il a déjà
+   manqué CE module précisément (demande du 18/09/2026, même principe que
+   côté formateur/gestionnaire/administrateur, mais nul besoin d'un clic
+   puisqu'un seul stagiaire est concerné : tout tient dans la case). */
+function contenuAbsStagiaire(s, entree, compteParModule){
+  const fad=s[3]===1;
+  const qui=D.nomAff[s[0]]||'';
+  const salle = fad ? 'À distance' : (D.S[s[4]] ? 'Salle '+D.S[s[4]].replace(/^S0?/,'') : 'Salle à affecter');
+  let cls='enattente', label='Non relevé';
+  if(entree){
+    const absent=Array.isArray(entree.absents) && entree.absents.some(([n,p])=>norm(n)===norm(profil.nom) && norm(p)===norm(profil.prenom));
+    if(absent){ const n=compteParModule[s[5]]||1; cls='absent'; label=n+' absence'+(n>1?'s':'')+' dans ce module'; }
+    else{ cls='present'; label='Présent'; }
+  }
+  return `<span class="seance ${cls}"><span class="qui">${qui}</span>
+    <span class="quoi">${D.M[s[5]]||''}</span><span class="ou">${salle}</span>
+    <span class="etatSeance">${label}</span></span>`;
 }
-function brancherNavJourCreneau(box, etat, onChange){
-  box.querySelectorAll('.navS').forEach(b=>b.onclick=()=>{ etat.sem=+b.dataset.sem; onChange(); });
-  box.querySelectorAll('.navJ').forEach(b=>b.onclick=()=>{ etat.jour=+b.dataset.jour; onChange(); });
-  box.querySelectorAll('.navC').forEach(b=>b.onclick=()=>{ etat.creneau=+b.dataset.cr; onChange(); });
-}
-/* Lit UNE case (semaine/jour/créneau) de pointage/* — bien moins coûteux
-   que de tout parcourir puisque l'utilisateur navigue case par case. */
-async function lirePointageCase(sem, jour, creneau){
+async function grilleAbsSemaineStagiaire(iG, sem){
+  const ses=(D.semaines[sem]||[]).filter(s=>s[6].includes(iG));
   let doc;
-  try{ doc=await db.doc('pointage/s'+sem).get(); }catch(e){ return {}; }
-  if(!doc || !doc.exists || !doc.data) return {};
-  return doc.data[jour+'_'+creneau] || {};
+  try{ doc=await db.doc('pointage/s'+sem).get(); }catch(e){ doc=null; }
+  const pointage=(doc && doc.exists && doc.data) || {};
+  /* pour chaque module de la semaine, combien de fois CE stagiaire l'a
+     déjà manqué (toutes semaines confondues) */
+  const modules=[...new Set(ses.map(s=>s[5]))];
+  const compteParModule={};
+  for(const modI of modules){
+    let n=0;
+    for(let w=0; w<(D.semaines||[]).length; w++){
+      const seancesModule=(D.semaines[w]||[]).filter(s=>s[5]===modI && s[6].includes(iG));
+      if(!seancesModule.length) continue;
+      let doc2;
+      try{ doc2=await db.doc('pointage/s'+w).get(); }catch(e){ continue; }
+      if(!doc2 || !doc2.exists || !doc2.data) continue;
+      seancesModule.forEach(s=>{
+        const e=(doc2.data[s[1]+'_'+s[2]]||{})[iG];
+        if(e && Array.isArray(e.absents) && e.absents.some(([n2,p2])=>norm(n2)===norm(profil.nom) && norm(p2)===norm(profil.prenom))) n++;
+      });
+    }
+    compteParModule[modI]=n;
+  }
+  let t='<tr><th class="jour"></th>'+CRENEAUX.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  for(let d=0; d<6; d++){
+    t+=`<tr><th class="jour">${JOURS[d]}</th>`;
+    for(let cr=0; cr<4; cr++){
+      const ici=ses.filter(x=>x[1]===d && x[2]===cr);
+      if(!ici.length){ t+='<td class="vide"></td>'; continue; }
+      const entree=(pointage[d+'_'+cr]||{})[iG];
+      t+='<td>'+ici.map(s=>contenuAbsStagiaire(s, entree, compteParModule)).join('')+'</td>';
+    }
+    t+='</tr>';
+  }
+  return '<div class="cadre-grille"><table class="grille">'+t+'</table></div>';
 }
-let ABS_NAV_STAG={sem:0, jour:0, creneau:0};
 async function detailAbsJourStagiaire(){
   const box=$('detailAbsJour'); if(!box) return;
   const nbSem=(D.semaines||[]).length;
-  box.innerHTML=navJourCreneauHtml(ABS_NAV_STAG, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
-  brancherNavJourCreneau(box, ABS_NAV_STAG, detailAbsJourStagiaire);
+  box.innerHTML=navSemaineHtml(ABS_NAV_STAG, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+  brancherNavSemaine(box, ABS_NAV_STAG, detailAbsJourStagiaire);
   const cle=box.querySelector('.zoneRes');
-  const cases=await lirePointageCase(ABS_NAV_STAG.sem, ABS_NAV_STAG.jour, ABS_NAV_STAG.creneau);
+  const html=await grilleAbsSemaineStagiaire(profil.iG, ABS_NAV_STAG.sem);
   if(box!==$('detailAbsJour')) return;                // la page a changé entre-temps
-  const entree=cases[profil.iG];
-  if(!entree){ cle.innerHTML='<div class="vide-msg">Aucun cours relevé pour vous sur ce créneau.</div>'; return; }
-  const moi=Array.isArray(entree.absents) && entree.absents.some(([n,p])=>norm(n)===norm(profil.nom) && norm(p)===norm(profil.prenom));
-  cle.innerHTML=carteEtatHtml(moi, D.nomAff[entree.fi]||(D.F||[])[entree.fi]||'—');
-}
-/* Carte de résultat pour UNE case (stagiaire) — pastille d'état + nom du
-   formateur, plus posée qu'une ligne de texte (demande du 18/09/2026). */
-function carteEtatHtml(absent, nomForm){
-  return '<div class="carteAbsJour">'+
-    '<div class="pastilleEtat '+(absent?'non':'ok')+'">'+(absent?'✗ Absent':'✓ Présent')+'</div>'+
-    '<div class="ligneForm"><span class="ic">👤</span>'+nomForm+'</div></div>';
+  cle.innerHTML=html;
 }
 function afficherAbs(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
