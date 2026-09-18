@@ -221,6 +221,11 @@ async function ouvrirFirebase(){
     if(!window.firebase) throw new Error('SDK Firebase non chargé');
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     fs=firebase.firestore(); fbAuth=firebase.auth();
+    /* Aucune session responsable mémorisée (demande du 18/09/2026) : le mot
+       de passe est redemandé à chaque fois qu'il quitte l'application
+       (fermeture de l'onglet, nouvelle ouverture) — Firebase ne garde la
+       connexion qu'en mémoire pour cette page, jamais sur l'appareil. */
+    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e2){}
   }catch(e){ console.error('Firebase', e); fs=null; }
 }
 /* Chaque document est rangé en JSON texte (Firestore refuse les tableaux
