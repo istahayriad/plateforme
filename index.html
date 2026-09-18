@@ -1964,6 +1964,22 @@ function initAdmin(){
     d.absSem = tampon.abs ? tampon.abs.sem : (anc.absSem || []);
     try{
       const ou=await ecrireDonnees(d);
+      /* « serveur (absences) » : pas connecté comme responsable — seules les
+         absences sont réellement parties au serveur (ecrireDonnees le fait
+         exprès, § droits d'un gestionnaire). Le message le disait mal : il
+         affichait quand même le compte de stagiaires/formateurs DEMANDÉ,
+         donnant l'impression que tout était publié alors que non — corrigé
+         le 18/09/2026 après un dépôt de la liste des stagiaires resté sans
+         effet côté suivi d'absence. */
+      if(ou==='serveur (absences)'){
+        erreur('errAdmin','Vous n\'êtes pas connecté comme responsable : seules les absences '
+          +'ont été envoyées au serveur. Les emplois et les listes (formateurs, stagiaires) '
+          +'n\'ont PAS été publiés. Connectez-vous avec le compte du responsable puis publiez '
+          +'de nouveau.');
+        $('etatPub').textContent=(($('etatPub').textContent||'')+' ').trim()+
+          ' Absences seulement envoyées ('+(d.abs||[]).length+' relevés) — non connecté comme responsable.';
+        return;
+      }
       D=d; remplirGroupes();
       $('etatPub').textContent=(($('etatPub').textContent||'')+' ').trim()+
         ' Publié ('+ou+') : '+d.semaines.length+' semaines, '+d.formateurs.length+
