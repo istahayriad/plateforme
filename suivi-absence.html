@@ -34,7 +34,8 @@ button{font-family:inherit; cursor:pointer;}
 .choix{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:26px;}
 .choix-seule{max-width:320px; margin-left:auto; margin-right:auto;}
 .porte{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:26px 22px; text-align:left; font:inherit; color:inherit; box-shadow:var(--ombre);}
-.porte h2{font-family:'Archivo',sans-serif; font-size:18px; margin:0;}
+.porte h2{font-family:'Archivo',sans-serif; font-size:18px; margin:0 0 4px;}
+.porte p{margin:0; font-size:13px; color:var(--encre-doux);}
 
 /* ---- Agent : très gros, très peu de texte ---- */
 .pin{max-width:340px; margin:60px auto; text-align:center;}
@@ -162,9 +163,9 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
        secret (voir SECRET_DIRECTION plus bas), jamais affiché à l'écran. -->
   <section id="vueAccueil">
     <div class="choix">
-      <button class="porte" id="porteAgent"><h2>Gestionnaires de stagiaires</h2></button>
-      <button class="porte" id="porteDirEtab"><h2>Directeur d'établissement</h2></button>
-      <button class="porte" id="porteDirComplexe"><h2>Directeur de complexe</h2></button>
+      <button class="porte" id="porteAgent"><h2>Gestionnaires de stagiaires</h2><p>Pointer la présence par groupe pendant la tournée.</p></button>
+      <button class="porte" id="porteDirEtab"><h2>Directeur d'établissement</h2><p>État des absences par groupe.</p></button>
+      <button class="porte" id="porteDirComplexe"><h2>Directeur de complexe</h2><p>État des absences par groupe.</p></button>
     </div>
   </section>
 
