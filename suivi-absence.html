@@ -125,16 +125,23 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
    semaine, colorée comme sur la plateforme (verte présent, rouge absent,
    grise non relevé). */
 /* La grille jours × créneaux est gardée telle quelle (demande du
-   19/09/2026 : « laisse l'emploi tel qu'il est ») — sur téléphone, elle
-   défile horizontalement plutôt que de tasser les 4 créneaux dans la
-   largeur de l'écran, avec des colonnes assez larges pour rester
-   lisibles (essai précédent en cartes empilées, abandonné). */
-.grilleAbsScroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:12px; padding-bottom:4px;}
-.grilleAbs{border-collapse:separate; border-spacing:6px; table-layout:auto;}
-.grilleAbs th{font-size:10px; text-transform:uppercase; color:var(--encre-doux); padding:0 2px 4px; text-align:center; white-space:nowrap;}
-.grilleAbs th.jr{text-align:right; padding-right:8px; font-size:12px; font-weight:700; color:var(--encre); text-transform:none;}
-.grilleAbs td{background:var(--carte); border:2px solid var(--ligne); border-radius:10px; padding:9px 10px; vertical-align:top; font-size:12px; width:150px; min-width:150px;}
+   19/09/2026 : « laisse l'emploi tel qu'il est »), mais DOIT tenir dans la
+   largeur de l'écran sans défiler (rejeté : le défilement horizontal du
+   19/09) — les 5 colonnes se partagent 100 % de la largeur sur téléphone,
+   texte compact ; à partir de 641px (tablette/PC) les colonnes reprennent
+   une largeur confortable. */
+.grilleAbsScroll{margin-top:12px;}
+.grilleAbs{width:100%; border-collapse:separate; border-spacing:4px; table-layout:fixed;}
+.grilleAbs th{font-size:8.5px; text-transform:uppercase; color:var(--encre-doux); padding:0 1px 3px; text-align:center;}
+.grilleAbs th.jr{width:13%; text-align:left; font-size:10px; font-weight:700; color:var(--encre); text-transform:none;}
+.grilleAbs td{background:var(--carte); border:2px solid var(--ligne); border-radius:8px; padding:5px 4px; vertical-align:top; font-size:9.5px; line-height:1.25; overflow-wrap:break-word;}
 .grilleAbs td.vide{background:transparent; border-style:dashed;}
+@media (min-width:641px){
+  .grilleAbs{table-layout:auto; border-spacing:6px;}
+  .grilleAbs th{font-size:10px; padding:0 2px 4px;}
+  .grilleAbs th.jr{width:auto; text-align:right; padding-right:8px; font-size:12px;}
+  .grilleAbs td{padding:9px 10px; font-size:12px; width:150px; min-width:150px;}
+}
 .grilleAbs td.present{background:var(--vert-doux); border-color:var(--vert);}
 .grilleAbs td.absent{background:var(--rouge-doux); border-color:var(--rouge); cursor:pointer;}
 .grilleAbs td.enattente{border-color:var(--ligne);}
