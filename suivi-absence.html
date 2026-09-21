@@ -264,9 +264,16 @@ async function ouvrirFirebase(){
        conception (comme apiKey), elle ne protège rien à elle seule — la
        protection vient de l'application forcée côté Firestore (App Check
        → Cloud Firestore → Appliquer), à activer dans la console. */
+    /* reCAPTCHA ENTERPRISE (21/09/2026 soir) : l'application est enregistrée
+       en Enterprise dans la console App Check, et le classique v3 n'y est
+       plus accepté — avec l'ancien fournisseur v3, Firebase répondait
+       « App not registered » (400) et aucun jeton n'était jamais émis
+       (requêtes vues « obsolètes », puis tout bloqué dès « Appliquer »).
+       Clé Enterprise créée dans Google Cloud, même projet, domaine
+       istahayriad.github.io. */
     try{
       firebase.appCheck().activate(
-        new firebase.appCheck.ReCaptchaV3Provider('6LfuBMgtAAAAAA9pyAoiSIveO61ZBF4zC6n8Mzo6'),
+        new firebase.appCheck.ReCaptchaEnterpriseProvider('6LfMzsctAAAAAMTwTwCqmIC_tlABhvTR1keKY-1I'),
         true
       );
     }catch(e3){ console.error('App Check', e3); }
