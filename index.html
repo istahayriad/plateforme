@@ -513,6 +513,12 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
         </div>
       </div>
       <div id="admContenu" hidden>
+      <!-- Se déconnecter (21/09/2026) : la session du responsable reste
+           mémorisée dans le navigateur ; sur un appareil partagé, ce bouton
+           la ferme et redemande le mot de passe. -->
+      <div class="rangee noprint" style="justify-content:flex-end;margin:-4px 0 6px">
+        <button class="action fantome" id="btnDeconnexionAdm" title="Ferme votre session sur cet appareil : le mot de passe sera redemandé">Se déconnecter</button>
+      </div>
       <!-- Quatre sous-pages : ce qu'on publie, les absences, les demandes des
            formateurs, les outils. Les identifiants des dépôts ne changent pas. -->
       <div class="onglets noprint" id="ongletsAdmin">
@@ -2361,6 +2367,12 @@ $('okAdm').onclick=async()=>{
   $('admGate').hidden=true; $('admContenu').hidden=false;
 };
 $('admMdp').onkeydown=e=>{ if(e.key==='Enter') $('okAdm').click(); };
+$('btnDeconnexionAdm').onclick=async()=>{
+  try{ if(fbAuth) await fbAuth.signOut(); }catch(e){}
+  admOuvert=false; $('admMdp').value='';
+  $('admContenu').hidden=true; $('admGate').hidden=false;
+  vue('Accueil');
+};
   /* --- gestionnaire de stagiaires : il ne depose que les absences --------
      La direction garde l espace complet ; le gestionnaire n y voit que le
      fichier des absences, qui est sa seule responsabilite. */
