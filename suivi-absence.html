@@ -58,11 +58,13 @@ button{font-family:inherit; cursor:pointer;}
 .voletLabel{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
 .grilleNoms{display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin-top:6px;}
 .grilleSalles{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:6px;}
-.tuileSalle{display:flex; align-items:center; justify-content:center; padding:20px 4px;
-  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px;}
+.tuileSalle{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 4px;
+  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px; gap:2px;}
 .tuileSalle .num{font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; color:var(--encre);}
+.tuileSalle .grp{font-size:11px; font-weight:600; color:var(--encre-doux); text-align:center; line-height:1.2;}
 .tuileSalle.faite{border-color:var(--vert); background:var(--vert);}
 .tuileSalle.faite .num{color:#fff;}
+.tuileSalle.faite .grp{color:#fff;}
 .tuileSalle.fad{border-style:dashed;}
 .pairVA{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
 .pairVA .valider{padding:18px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:17px; font-weight:800; box-shadow:var(--ombre);}
@@ -513,7 +515,8 @@ async function afficherSalles(){
   const tuiles=Array.from({length:30},(_,i)=>i+1).filter(n=>parSalle[n]).map(n=>{
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
-    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span></button>`;
+    const noms=lg.map(l=>(META.G[l.gi]||[])[0]||'groupe '+l.gi).join(' · ');
+    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span><span class="grp">${noms}</span></button>`;
   }).join('');
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
