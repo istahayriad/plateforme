@@ -195,7 +195,7 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
       <div class="ofpptCarte">
         <div class="ofpptMarque">ISTA HAY RIAD</div>
         <h1>Connectez-vous à votre compte</h1>
-        <div class="champ"><label for="admEmail">Adresse e-mail<span class="req">*</span></label><input id="admEmail" type="email" autocomplete="username" value="achraf.elgharabi@ofppt.ma"></div>
+        <div class="champ"><label for="admEmail">Adresse e-mail<span class="req">*</span></label><input id="admEmail" type="email" autocomplete="username"></div>
         <div class="champ">
           <div class="ofpptLigneLabel"><label for="admMdp">Mot de passe<span class="req">*</span></label></div>
           <div class="ofpptMdp">
@@ -239,10 +239,12 @@ const FIREBASE_CONFIG={
   messagingSenderId: "683780273492",
   appId: "1:683780273492:web:f00ef52a85898b39d504c1"
 };
-const ADMIN_EMAIL='achraf.elgharabi@ofppt.ma';
-/* Code de l'agent — à changer ici si besoin (4 chiffres). Le responsable le
-   communique de vive voix à l'agent de sécurité. */
-const CODE_AGENT='0044';
+/* Code de l'agent et lien secret responsable : ne sont PLUS écrits ici en
+   clair (demande du 21/09/2026) — lus depuis Firestore (cfg/acces) au
+   démarrage, voir chargerAcces(). Valent null tant que ce document n'a pas
+   répondu : aucun accès n'est possible pendant ce court instant, ce qui est
+   voulu (jamais un code par défaut visible dans le fichier). */
+let CODE_AGENT=null;
 const CRENEAUX=['08h00 – 10h30','10h30 – 13h00','13h30 – 16h00','16h00 – 18h30'];
 const BORNES=[[8*60,10*60+30],[10*60+30,13*60],[13*60+30,16*60],[16*60,18*60+30]];
 const JOURS=['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
@@ -404,16 +406,31 @@ $('btnOeilMdp').onclick=()=>{
 
 /* ------------------------- accès responsable (lien secret) -------------------------
    Aucun bouton « Responsable » sur la page d'accueil : rien ne doit laisser
-   deviner qu'un espace responsable existe. L'accès se fait uniquement par ce
-   lien, à garder pour vous et à mettre en favori sur votre téléphone/PC :
-       https://istahayriad.github.io/plateforme/pointage.html#direction-ihr
-   Si jamais ce mot doit changer (lien vu par quelqu'un d'autre), changez la
-   valeur ci-dessous ET l'adresse que vous utilisez. */
-const SECRET_DIRECTION='direction-ihr';
+   deviner qu'un espace responsable existe. L'accès se fait uniquement par le
+   lien que vous gardez pour vous (mot ajouté après #, ex.
+   https://istahayriad.github.io/plateforme/suivi-absence.html#xxxxx).
+   Le mot lui-même n'est plus écrit ici (demande du 21/09/2026) — lu depuis
+   Firestore (cfg/acces) au démarrage, voir chargerAcces(). Pour le changer :
+   modifier le document cfg/acces dans la console Firebase, pas ce fichier. */
+let SECRET_DIRECTION=null;
 function verifierAccesSecret(){
-  if(location.hash.slice(1)===SECRET_DIRECTION){ vue('Admin'); ouvrirAdmin(); }
+  if(SECRET_DIRECTION && location.hash.slice(1)===SECRET_DIRECTION){ vue('Admin'); ouvrirAdmin(); }
 }
 window.addEventListener('hashchange', verifierAccesSecret);
+/* Lu une seule fois au démarrage (après ouvrirFirebase). Le document
+   cfg/acces est en lecture libre (comme pointage/*) — nécessaire pour que
+   l'agent, sans compte, puisse comparer son code sans passer par une
+   fonction serveur (aucun backend dans ce projet). Ce n'est donc pas un
+   secret absolu : quelqu'un qui inspecte les requêtes réseau peut encore le
+   lire. C'est une dissuasion supplémentaire par rapport au code en clair
+   dans le fichier HTML, pas une vraie barrière — la vraie protection reste
+   le mot de passe Firebase de l'espace responsable. */
+async function chargerAcces(){
+  try{
+    const c=await lireDoc('cfg/acces');
+    if(c){ CODE_AGENT=c.code||null; SECRET_DIRECTION=c.secret||null; }
+  }catch(e){}
+}
 
 /* ------------------------- AGENT ------------------------- */
 /* Code JAMAIS mémorisé (demande du 18/09/2026) : l'agent le ressaisit à
@@ -434,7 +451,7 @@ PC.forEach((inp,i)=>{
     if(inp.value && PC[i+1]) PC[i+1].focus();
     if(PC.every(x=>x.value)){
       const saisi=PC.map(x=>x.value).join('');
-      if(saisi===CODE_AGENT){
+      if(CODE_AGENT && saisi===CODE_AGENT){
         $('errPin').hidden=true; $('ecranPin').hidden=true; demarrerTournee();
       } else { $('errPin').hidden=false; PC.forEach(x=>x.value=''); PC[0].focus(); }
     }
@@ -837,6 +854,7 @@ function syntheseSemaineHtml(sessions, pointage){
 /* ------------------------- démarrage ------------------------- */
 (async function(){
   await ouvrirFirebase();
+  await chargerAcces();
   try{
     await chargerMeta();
     chargerEffectifs();   // pas bloquant : les cartes s'affichent même si ça tarde
