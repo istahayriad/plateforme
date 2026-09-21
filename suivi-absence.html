@@ -60,8 +60,8 @@ button{font-family:inherit; cursor:pointer;}
 .grilleSalles{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:6px;}
 .tuileSalle{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 4px;
   border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px; gap:2px;}
-.tuileSalle .num{font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; color:var(--encre);}
-.tuileSalle .grp{font-size:11px; font-weight:600; color:var(--encre-doux); text-align:center; line-height:1.2;}
+.tuileSalle .num{font-size:12px; font-weight:600; color:var(--encre-doux); text-align:center; line-height:1.2;}
+.tuileSalle .grp{font-family:'Archivo',sans-serif; font-size:18px; font-weight:800; color:var(--encre); text-align:center; line-height:1.2;}
 .tuileSalle.faite{border-color:var(--vert); background:var(--vert);}
 .tuileSalle.faite .num{color:#fff;}
 .tuileSalle.faite .grp{color:#fff;}
@@ -516,7 +516,7 @@ async function afficherSalles(){
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
     const noms=lg.map(l=>(META.G[l.gi]||[])[0]||'groupe '+l.gi).join(' · ');
-    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="num">${n}</span><span class="grp">${noms}</span></button>`;
+    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="grp">${noms}</span><span class="num">Salle ${n}</span></button>`;
   }).join('');
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
