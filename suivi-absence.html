@@ -221,6 +221,7 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
 <script>
 /* ===================================================================
    ISTA HAY RIAD — application indépendante de la plateforme de consultation,
@@ -255,6 +256,20 @@ async function ouvrirFirebase(){
   try{
     if(!window.firebase) throw new Error('SDK Firebase non chargé');
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    /* App Check (demande du 21/09/2026) : bloque côté Firebase toute
+       requête Firestore qui ne vient pas de cette page réellement chargée
+       depuis istahayriad.github.io — une copie bricolée du fichier HTML,
+       ou un appel direct à l'API, n'obtient jamais de jeton valide. La clé
+       ci-dessous est la « clé de site » reCAPTCHA v3 : publique par
+       conception (comme apiKey), elle ne protège rien à elle seule — la
+       protection vient de l'application forcée côté Firestore (App Check
+       → Cloud Firestore → Appliquer), à activer dans la console. */
+    try{
+      firebase.appCheck().activate(
+        new firebase.appCheck.ReCaptchaV3Provider('6LfuBMgtAAAAAA9pyAoiSIveO61ZBF4zC6n8Mzo6'),
+        true
+      );
+    }catch(e3){ console.error('App Check', e3); }
     fs=firebase.firestore(); fbAuth=firebase.auth();
     /* Aucune session responsable mémorisée (demande du 18/09/2026) : le mot
        de passe est redemandé à chaque fois qu'il quitte l'application
