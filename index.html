@@ -624,6 +624,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
 <script>
 const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const CRENEAUX=['08h00 – 10h30','10h30 – 13h00','13h30 – 16h00','16h00 – 18h30'];
@@ -681,6 +682,18 @@ async function ouvrirDb(){
   try{
     if(!window.firebase) throw new Error('SDK Firebase non chargé');
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    /* App Check (21/09/2026) : depuis que l'application forcée est activée
+       sur Cloud Firestore (voir suivi-absence.html), toute page du projet
+       doit présenter un jeton reCAPTCHA Enterprise — sans ces lignes la
+       plateforme répondait « Missing or insufficient permissions » et
+       retombait sur les données de démonstration. Même clé, même
+       application Web, même domaine que le suivi d'absence. */
+    try{
+      firebase.appCheck().activate(
+        new firebase.appCheck.ReCaptchaEnterpriseProvider('6LfMzsctAAAAAMTwTwCqmIC_tlABhvTR1keKY-1I'),
+        true
+      );
+    }catch(e3){ console.error('App Check', e3); }
     const fs=firebase.firestore(); fbAuth=firebase.auth();
     /* Firestore refuse les tableaux imbriqués (une séance = tableau dans un
        tableau) et les valeurs indéfinies : chaque document est donc rangé
