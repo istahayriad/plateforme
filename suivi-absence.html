@@ -511,11 +511,26 @@ async function afficherSalles(){
   /* Se référer à l'emploi : seules les salles avec un groupe réellement
      affecté à ce créneau apparaissent — plus de tuiles vides/grisées
      (demande du 17/09/2026). Tuile blanche par défaut, verte une fois la
-     salle entièrement validée — plus aucun texte sous le numéro. */
-  const tuiles=Array.from({length:30},(_,i)=>i+1).filter(n=>parSalle[n]).map(n=>{
+     salle entièrement validée. Classées 3A puis 2A puis 1A, ordre
+     alphabétique dans chaque année (demande du 21/09/2026) — plus par
+     numéro de salle. L'année vient de META.G[gi][2] (même convention que
+     le générateur, '3'/'2'/'1'). */
+  const anneeGi=gi=>String((META.G[gi]||[])[2]||'').trim();
+  const rangAnnee=a=>a==='3'?0:(a==='2'?1:(a==='1'?2:3));
+  const nomsSalle=n=>parSalle[n].map(l=>(META.G[l.gi]||[])[0]||'groupe '+l.gi).sort((a,b)=>a.localeCompare(b)).join(' · ');
+  const cleTriSalle=n=>{
+    const lg=parSalle[n];
+    const rang=Math.min(...lg.map(l=>rangAnnee(anneeGi(l.gi))));
+    return [rang, nomsSalle(n)];
+  };
+  const salles=Object.keys(parSalle).map(Number).sort((a,b)=>{
+    const [ra,na]=cleTriSalle(a), [rb,nb]=cleTriSalle(b);
+    return ra-rb || na.localeCompare(nb);
+  });
+  const tuiles=salles.map(n=>{
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
-    const noms=lg.map(l=>(META.G[l.gi]||[])[0]||'groupe '+l.gi).join(' · ');
+    const noms=nomsSalle(n);
     return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="grp">${noms}</span><span class="num">Salle ${n}</span></button>`;
   }).join('');
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
