@@ -184,14 +184,17 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
       <p class="erreur" id="errPin" hidden>Code incorrect.</p>
     </div>
     <div id="ecranTournee" hidden>
+      <!-- Même disposition que l'espace responsable (demande du 23/09/2026) :
+           semaines en haut, jours en dessous — l'agent n'est plus limité à
+           la date du jour, il peut pointer une semaine passée ou à venir.
+           La date du jour est placée entre les deux rangées de pastilles,
+           là où se trouvait la barre de défilement des semaines (demande
+           du 23/09/2026, suite). -->
+      <div id="agentSemaines" class="chipsRow"></div>
       <div class="jourBandeau">
         <div class="date" id="dateAujourdhui"></div>
         <div class="heure" id="heureActuelle"></div>
       </div>
-      <!-- Même disposition que l'espace responsable (demande du 23/09/2026) :
-           semaines en haut, jours en dessous — l'agent n'est plus limité à
-           la date du jour, il peut pointer une semaine passée ou à venir. -->
-      <div id="agentSemaines" class="chipsRow"></div>
       <div id="agentJours" class="chipsRow"></div>
       <div class="creneaux" id="boutonsCreneaux"></div>
       <div id="listeFormateurs"></div>
