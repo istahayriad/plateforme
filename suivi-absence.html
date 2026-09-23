@@ -65,6 +65,11 @@ button{font-family:inherit; cursor:pointer;}
 .tuileSalle.faite{border-color:var(--vert); background:var(--vert);}
 .tuileSalle.faite .num{color:#fff;}
 .tuileSalle.faite .grp{color:#fff;}
+/* Absence collective (formateur absent, demande du 23/09/2026) : rouge,
+   pas vert — pour la distinguer d'une salle validée normalement. */
+.tuileSalle.abscol{border-color:var(--rouge); background:var(--rouge);}
+.tuileSalle.abscol .num{color:#fff;}
+.tuileSalle.abscol .grp{color:#fff;}
 .tuileSalle.fad{border-style:dashed;}
 .pairVA{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
 .pairVA .valider{padding:18px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:17px; font-weight:800; box-shadow:var(--ombre);}
@@ -183,6 +188,11 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
         <div class="date" id="dateAujourdhui"></div>
         <div class="heure" id="heureActuelle"></div>
       </div>
+      <!-- Même disposition que l'espace responsable (demande du 23/09/2026) :
+           semaines en haut, jours en dessous — l'agent n'est plus limité à
+           la date du jour, il peut pointer une semaine passée ou à venir. -->
+      <div id="agentSemaines" class="chipsRow"></div>
+      <div id="agentJours" class="chipsRow"></div>
       <div class="creneaux" id="boutonsCreneaux"></div>
       <div id="listeFormateurs"></div>
       <button class="lien-retour" id="btnDeconnexionAgent">← changer d'appareil / se déconnecter</button>
@@ -495,14 +505,36 @@ async function demarrerTournee(){
   $('dateAujourdhui').textContent=dateLongue(auj);
   const maj=()=>{ $('heureActuelle').textContent=auj.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); };
   maj(); setInterval(()=>{ const n=new Date(); $('heureActuelle').textContent=n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }, 30000);
-  if(!info){
-    $('boutonsCreneaux').innerHTML='';
-    $('listeFormateurs').innerHTML='<p class="videMsg">Aucun emploi publié pour aujourd\'hui. Contactez le service planning.</p>';
-    return;
-  }
-  AGENT_SW=info.w; AGENT_JOUR=info.jour;
+  /* Semaine et jour du jour par défaut, mais l'agent peut changer (voir
+     renderNavAgent) — sans emploi publié pour aujourd'hui, on démarre quand
+     même sur S1/lundi plutôt que de bloquer l'écran. */
+  AGENT_SW = info ? info.w : 0;
+  AGENT_JOUR = info ? info.jour : 0;
   const actuel=creneauActuel();
   AGENT_CRENEAU = actuel>=0 ? actuel : 0;
+  renderNavAgent();
+  AGENT_SALLE=null; AGENT_ATTENTE={};
+  afficherSalles();
+}
+/* Semaines en haut, jours en dessous — même disposition que l'espace
+   responsable (renderNavAdmin), demande du 23/09/2026. */
+function renderNavAgent(){
+  const nSem=Math.max(42, META.nbSem||0, (META.lundis||[]).length);
+  const semBox=$('agentSemaines');
+  semBox.innerHTML=Array.from({length:nSem},(_,w)=>
+    `<button class="${w===AGENT_SW?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
+  semBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_SW=+b.dataset.w; AGENT_SALLE=null; AGENT_ATTENTE={};
+    renderNavAgent(); afficherSalles();
+  });
+  const jourBox=$('agentJours');
+  jourBox.innerHTML=JOURS.map((j,i)=>
+    `<button class="${i===AGENT_JOUR?'on':''}" data-j="${i}">${j.charAt(0).toUpperCase()+j.slice(1)}</button>`).join('');
+  jourBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_JOUR=+b.dataset.j; AGENT_SALLE=null; AGENT_ATTENTE={};
+    renderNavAgent(); afficherSalles();
+  });
+  const actuel=AGENT_CRENEAU;
   $('boutonsCreneaux').innerHTML=CRENEAUX.map((c,i)=>
     `<button data-cr="${i}" class="${i===actuel?'actuel':''}">${i+1}ᵉ créneau<span class="h">${c}</span></button>`).join('');
   $('boutonsCreneaux').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -511,8 +543,6 @@ async function demarrerTournee(){
     AGENT_SALLE=null; AGENT_ATTENTE={};
     afficherSalles();
   });
-  AGENT_SALLE=null; AGENT_ATTENTE={};
-  afficherSalles();
 }
 /* Numéro de salle utilisé comme clé d'écran : 1 à 30, ou 'FAD' pour le
    distanciel (pas de salle physique). */
@@ -569,8 +599,14 @@ async function afficherSalles(){
   const tuiles=salles.map(n=>{
     const lg=parSalle[n];
     const complet = nPointees(lg)===lg.length;
+    /* Une salle où le formateur a été marqué absent (absence collective)
+       s'affiche en rouge, pas en vert (demande du 23/09/2026) — même
+       tuile « traitée », mais on doit voir au premier coup d'œil qu'il n'y
+       a pas eu cours. */
+    const uneAbsence = complet && lg.some(l=>{ const m=marques[l.gi]; return m && m.etat==='absent'; });
     const noms=nomsSalle(n);
-    return `<button class="tuileSalle ${complet?'faite':''}" data-salle="${n}"><span class="grp">${noms}</span><span class="num">Salle ${n}</span></button>`;
+    const cls = complet ? (uneAbsence?'faite abscol':'faite') : '';
+    return `<button class="tuileSalle ${cls}" data-salle="${n}"><span class="grp">${noms}</span><span class="num">Salle ${n}</span></button>`;
   }).join('');
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
