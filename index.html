@@ -473,7 +473,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
     </div>
     <!-- Sous-page 2 : le détail par stagiaire, même ordre décroissant. -->
     <div id="sousStag" hidden>
-      <div class="rangee noprint" style="margin-top:14px">
+      <div class="rangee noprint" id="filtresStag" style="margin-top:14px">
         <label for="etatAn2" style="font-size:12px;font-weight:600">Année</label>
         <select id="etatAn2" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
           <option value="__ALL__">Toutes</option><option value="1">1ʳᵉ année</option>
@@ -1690,9 +1690,37 @@ function etatAbsences(){
 }
 /* Une ligne par stagiaire, ses heures semaine par semaine, son total et son
    taux. C'est la vue qu'on consulte pour un cas précis avant un conseil. */
+/* Semaine d'une séance, en date complète (demande du 23/09/2026 : « Mercredi »
+   seul ne suffisait pas) — calculée à partir du lundi publié pour cette
+   semaine. */
+function dateDeSeance(sem, jour){
+  const lundi=(D && D.lundis && D.lundis[sem]) || null;
+  if(!lundi) return '';
+  const d=new Date(lundi+'T00:00:00'); d.setDate(d.getDate()+jour);
+  const p=n=>String(n).padStart(2,'0');
+  return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear();
+}
+/* Détail plein écran d'une semaine pour un stagiaire (demande du 23/09/2026) :
+   un clic sur une case d'absence remplace ENTIÈREMENT la liste des
+   stagiaires — plus de tableau ni de filtres visibles en même temps —, avec
+   un bouton « ← Retour » pour revenir. `null` = vue normale (la liste). */
+let ABS_STAG_DETAIL=null;
 function detailAbsences(){
   const box=$('zoneDetailAbs');
   if(!box) return;
+  const filtres=$('filtresStag');
+  if(ABS_STAG_DETAIL){
+    if(filtres) filtres.hidden=true;
+    box.innerHTML='<p class="note">Chargement…</p>';
+    const {grp,nom,pre,w}=ABS_STAG_DETAIL;
+    detailAbsStagiaireSemaineHtml(grp,nom,pre,w).then(html=>{
+      if(!ABS_STAG_DETAIL) return;                    // retour cliqué entre-temps
+      box.innerHTML='<button class="action fantome" id="btnRetourAbsStag" style="margin-bottom:12px">← Retour</button>'+html;
+      const b=$('btnRetourAbsStag'); if(b) b.onclick=()=>{ ABS_STAG_DETAIL=null; detailAbsences(); };
+    });
+    return;
+  }
+  if(filtres) filtres.hidden=false;
   const abs=(D && D.abs) || [];
   const sem=semAbs();
   const grp=($('etatGrp')||{}).value || '__ALL__';
@@ -1722,7 +1750,7 @@ function detailAbsences(){
         <td>${i+1}</td>
         <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
         ${x.h.map((v,w)=>{ const on=(+v||0)>0;
-          return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}"`:''}>${fmt(v)}</td>`; }).join('')}
+          return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:''}>${fmt(v)}</td>`; }).join('')}
         <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
         <td class="sanc">${x.sanction || '—'}
           ${x.obs?`<span class="det">${x.obs}</span>`:''}
@@ -1732,16 +1760,11 @@ function detailAbsences(){
     </table></div>
     <p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
       Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).
-      Cliquez sur une case d'absence pour voir le détail de la semaine.</p>
-    <div id="detailAbsStagSel" style="margin-top:12px"></div>`;
+      Cliquez sur une case d'absence pour voir le détail de la semaine.</p>`;
   box.querySelectorAll('.clicSem').forEach(td=>{
-    td.onclick=async ()=>{
-      const {grp, nom, pre, w}=td.dataset;
-      const zone=box.querySelector('#detailAbsStagSel');
-      if(!zone) return;
-      zone.innerHTML='<p class="note">Chargement…</p>';
-      zone.innerHTML=await detailAbsStagiaireSemaineHtml(grp, nom, pre, +w);
-      zone.scrollIntoView({behavior:'smooth', block:'nearest'});
+    td.onclick=()=>{
+      ABS_STAG_DETAIL={grp:td.dataset.grp, nom:td.dataset.nom, pre:td.dataset.pre, w:+td.dataset.w};
+      detailAbsences();
     };
   });
 }
@@ -1763,7 +1786,8 @@ async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
     if(!entree || !Array.isArray(entree.absents)) return;
     const trouve=entree.absents.some(([n,p])=>norm(n)===norm(nom) && norm(p)===norm(prenom));
     if(!trouve) return;
-    lignes.push({jour:JOURS[s[1]]||'', creneau:CRENEAUX[s[2]]||'', module:D.M[s[5]]||'', formateur:D.nomAff[s[0]]||''});
+    const d=dateDeSeance(sem, s[1]);
+    lignes.push({jour:(JOURS[s[1]]||'')+(d?' '+d:''), creneau:CRENEAUX[s[2]]||'', module:D.M[s[5]]||'', formateur:D.nomAff[s[0]]||''});
   });
   if(!lignes.length){
     return `<div class="carteAbsJour"><div class="entete"><span class="grp">${nom} ${prenom} — ${libSem}</span></div>
