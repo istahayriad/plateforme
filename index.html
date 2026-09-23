@@ -1710,6 +1710,9 @@ function detailAbsences(){
     return;
   }
   const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
+  /* Chaque case d'absence cumulée > 0 est cliquable (demande du 23/09/2026) :
+     elle affiche en dessous le détail de CETTE semaine pour CE stagiaire —
+     jour, créneau, module, formateur — via detailAbsStagiaireSemaineHtml. */
   box.innerHTML=`<div class="cadre-abs">
     <table class="abs">
       <tr><th>Rang</th><th class="qui">Stagiaire</th>
@@ -1718,7 +1721,8 @@ function detailAbsences(){
       ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
         <td>${i+1}</td>
         <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
-        ${x.h.map(v=>`<td class="sem${(+v||0)>0?' plein':''}">${fmt(v)}</td>`).join('')}
+        ${x.h.map((v,w)=>{ const on=(+v||0)>0;
+          return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}"`:''}>${fmt(v)}</td>`; }).join('')}
         <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
         <td class="sanc">${x.sanction || '—'}
           ${x.obs?`<span class="det">${x.obs}</span>`:''}
@@ -1727,7 +1731,51 @@ function detailAbsences(){
       </tr>`).join('')}
     </table></div>
     <p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
-      Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).</p>`;
+      Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).
+      Cliquez sur une case d'absence pour voir le détail de la semaine.</p>
+    <div id="detailAbsStagSel" style="margin-top:12px"></div>`;
+  box.querySelectorAll('.clicSem').forEach(td=>{
+    td.onclick=async ()=>{
+      const {grp, nom, pre, w}=td.dataset;
+      const zone=box.querySelector('#detailAbsStagSel');
+      if(!zone) return;
+      zone.innerHTML='<p class="note">Chargement…</p>';
+      zone.innerHTML=await detailAbsStagiaireSemaineHtml(grp, nom, pre, +w);
+      zone.scrollIntoView({behavior:'smooth', block:'nearest'});
+    };
+  });
+}
+/* Détail d'une semaine d'absence pour UN stagiaire (demande du 23/09/2026) :
+   jour, créneau, module et formateur de chaque séance où il a été relevé
+   absent — relu dans pointage/s<sem>, la même source que la grille « Par
+   jour et créneau ». */
+async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
+  const iG=D.G.findIndex(g=>g[0]===nomGroupe);
+  const libSem=(semAbs()[sem]) || ('S'+(sem+1));
+  if(iG<0) return '<div class="vide-msg">Groupe introuvable.</div>';
+  const ses=(D.semaines[sem]||[]).filter(s=>s[6].includes(iG));
+  let doc;
+  try{ doc=await db.doc('pointage/s'+sem).get(); }catch(e){ doc=null; }
+  const pointage=(doc && doc.exists && doc.data) || {};
+  const lignes=[];
+  ses.forEach(s=>{
+    const entree=(pointage[s[1]+'_'+s[2]]||{})[iG];
+    if(!entree || !Array.isArray(entree.absents)) return;
+    const trouve=entree.absents.some(([n,p])=>norm(n)===norm(nom) && norm(p)===norm(prenom));
+    if(!trouve) return;
+    lignes.push({jour:JOURS[s[1]]||'', creneau:CRENEAUX[s[2]]||'', module:D.M[s[5]]||'', formateur:D.nomAff[s[0]]||''});
+  });
+  if(!lignes.length){
+    return `<div class="carteAbsJour"><div class="entete"><span class="grp">${nom} ${prenom} — ${libSem}</span></div>
+      <p class="note">Aucun relevé détaillé trouvé pour cette semaine (l'agent n'a peut-être pas encore pointé sur ce créneau).</p></div>`;
+  }
+  return `<div class="carteAbsJour">
+    <div class="entete"><span class="grp">${nom} ${prenom} — ${nomGroupe} — ${libSem}</span></div>
+    <div class="cadre-abs" style="margin-top:8px"><table class="abs">
+      <tr><th>Jour</th><th>Créneau</th><th class="qui">Module</th><th class="qui">Formateur</th></tr>
+      ${lignes.map(l=>`<tr><td>${l.jour}</td><td>${l.creneau}</td><td class="qui">${l.module}</td><td class="qui">${l.formateur}</td></tr>`).join('')}
+    </table></div>
+  </div>`;
 }
 
 let ABS_NAV_ADMIN={sem:0};
