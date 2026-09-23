@@ -191,11 +191,11 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
            là où se trouvait la barre de défilement des semaines (demande
            du 23/09/2026, suite). -->
       <div id="agentSemaines" class="chipsRow"></div>
+      <div id="agentJours" class="chipsRow"></div>
       <div class="jourBandeau">
         <div class="date" id="dateAujourdhui"></div>
         <div class="heure" id="heureActuelle"></div>
       </div>
-      <div id="agentJours" class="chipsRow"></div>
       <div class="creneaux" id="boutonsCreneaux"></div>
       <div id="listeFormateurs"></div>
       <button class="lien-retour" id="btnDeconnexionAgent">← changer d'appareil / se déconnecter</button>
@@ -506,8 +506,12 @@ async function demarrerTournee(){
   const info=semaineEtJourDuJour();
   const auj=new Date();
   $('dateAujourdhui').textContent=dateLongue(auj);
-  const maj=()=>{ $('heureActuelle').textContent=auj.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); };
-  maj(); setInterval(()=>{ const n=new Date(); $('heureActuelle').textContent=n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }, 30000);
+  /* Fuseau du Maroc forcé explicitement (demande du 23/09/2026 : l'horloge
+     affichait l'heure GMT) — sans ce réglage, l'heure suit le fuseau de
+     l'appareil, pas celui de l'établissement. */
+  const HEURE_OPTS={hour:'2-digit', minute:'2-digit', timeZone:'Africa/Casablanca'};
+  const maj=()=>{ $('heureActuelle').textContent=(new Date()).toLocaleTimeString('fr-FR',HEURE_OPTS); };
+  maj(); setInterval(maj, 30000);
   /* Semaine et jour du jour par défaut, mais l'agent peut changer (voir
      renderNavAgent) — sans emploi publié pour aujourd'hui, on démarre quand
      même sur S1/lundi plutôt que de bloquer l'écran. */
@@ -871,7 +875,7 @@ function rendreDetailAdmin(sessions, pointage){
         const etatTxt = !marque ? '<span class="etat attente">en attente</span>'
           : marque.etat==='present' ? '<span class="etat present">✓ présent</span>'
           : '<span class="etat absent">✗ absent</span>';
-        const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
+        const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Casablanca'}) : '—';
         html+=`<tr><td>${nom}</td><td>${groupe}</td><td>${salle}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
       });
       html+='</table></div></div>';
