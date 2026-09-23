@@ -37,6 +37,7 @@ button{font-family:inherit; cursor:pointer;}
 .pinBoites{display:flex; gap:10px; justify-content:center; margin:20px 0;}
 .pinBoites input{width:52px; height:64px; text-align:center; font-size:28px; border:2px solid var(--ligne); border-radius:12px; background:var(--carte); color:var(--encre);}
 .gros{width:100%; padding:20px; font-size:20px; font-weight:700; border-radius:14px; border:none; background:var(--vert); color:#fff; box-shadow:var(--ombre);}
+#listeFormateurs{transition:opacity .12s ease;}
 .jourBandeau{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:18px; text-align:center; box-shadow:var(--ombre); margin-top:14px;}
 .jourBandeau .date{font-family:'Archivo',sans-serif; font-size:20px; font-weight:800;}
 .jourBandeau .heure{font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--vert); margin-top:4px;}
@@ -567,7 +568,13 @@ function clefSalle({type,salleI}){
    longue liste de groupes triés. */
 async function afficherSalles(){
   const box=$('listeFormateurs');
-  box.innerHTML='<p class="videMsg">Chargement…</p>';
+  /* La page « sautait » à chaque changement de créneau (demande du
+     23/09/2026) : vider la grille tout de suite l'effondrait à une ligne,
+     puis elle reprenait sa hauteur une fois les salles chargées — un
+     effondrement/rebond bien visible. On garde maintenant la grille
+     précédente affichée (juste assombrie) le temps du chargement, et on ne
+     la remplace qu'une fois le nouveau contenu prêt, en un seul geste. */
+  box.style.opacity='0.35';
   const sessions=await chargerSemaine(AGENT_SW);
   const ici=sessions.filter(s=>s[1]===AGENT_JOUR && s[2]===AGENT_CRENEAU);
   /* Séances FAD éliminées (demande du 18/09/2026) : l'agent fait une
@@ -580,7 +587,7 @@ async function afficherSalles(){
     groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
   });
   AGENT_PAR_GROUPE=parGroupe;
-  if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; return; }
+  if(!parGroupe.length){ box.innerHTML='<p class="videMsg">Aucun cours en salle à ce créneau.</p>'; box.style.opacity='1'; return; }
   const pointage=(await lireDoc('pointage/s'+AGENT_SW)) || {};
   const cle=AGENT_JOUR+'_'+AGENT_CRENEAU;
   const marques=(pointage[cle]) || {};
@@ -621,6 +628,7 @@ async function afficherSalles(){
   const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
   box.innerHTML = `<div class="compteur">${totalPointees} / ${total} salles traitées</div>
     <div class="grilleSalles">${tuiles}</div>`;
+  box.style.opacity='1';
   box.querySelectorAll('.tuileSalle[data-salle]').forEach(btn=>{
     btn.onclick=()=>{ AGENT_SALLE = +btn.dataset.salle; AGENT_ATTENTE={}; afficherSalleDetail(); };
   });
