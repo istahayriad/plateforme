@@ -892,6 +892,18 @@ let ABS_VUE_F='semaine';      // bascule des « Absences » du formateur
    absents:[[nom,prénom],...], fi}}}). Grille hebdomadaire (même forme que
    « Mon emploi ») partout — stagiaire, formateur, gestionnaire/
    administrateur — via `navSemaineHtml`/`brancherNavSemaine` communes. */
+/* Semaine ouverte par défaut dans les grilles d'absence : celle du jour,
+   d'après les lundis publiés (demande du 23/09/2026 — les vues s'ouvraient
+   sur S1, vide, et le relevé du mercredi de S3 semblait perdu). */
+function semaineDuJourPub(){
+  const ls=(D && D.lundis) || [];
+  const auj=new Date(); auj.setHours(0,0,0,0);
+  for(let w=ls.length-1; w>=0; w--){
+    const diff=Math.round((auj-new Date(ls[w]+'T00:00:00'))/86400000);
+    if(diff>=0 && diff<=6) return w;
+  }
+  return Math.max(0, ls.length-1);     // année finie : la dernière publiée
+}
 let ABS_NAV_STAG={sem:0};
 /* Une case de la grille du stagiaire : verte s'il est présent, rouge s'il
    est relevé absent — avec, dans la case, le nombre de fois où il a déjà
@@ -952,6 +964,7 @@ async function grilleAbsSemaineStagiaire(iG, sem){
 async function detailAbsJourStagiaire(){
   const box=$('detailAbsJour'); if(!box) return;
   const nbSem=(D.semaines||[]).length;
+  if(ABS_NAV_STAG.sem==null || !ABS_NAV_STAG.vu){ ABS_NAV_STAG.sem=semaineDuJourPub(); ABS_NAV_STAG.vu=true; }
   box.innerHTML=navSemaineHtml(ABS_NAV_STAG, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
   brancherNavSemaine(box, ABS_NAV_STAG, detailAbsJourStagiaire);
   const cle=box.querySelector('.zoneRes');
@@ -959,7 +972,34 @@ async function detailAbsJourStagiaire(){
   if(box!==$('detailAbsJour')) return;                // la page a changé entre-temps
   cle.innerHTML=html;
 }
+/* Les absences cumulées (collection `abs`) sont chargées une fois à
+   l'ouverture de la page : un onglet resté ouvert affichait donc toujours
+   0 h alors que l'agent venait de relever des absences — la vue « par jour »,
+   elle, relit le serveur à chaque affichage (constaté le 23/09/2026,
+   GEOCM301). On les relit ici, au plus une fois toutes les 20 secondes,
+   puis on redessine si quelque chose a changé. */
+let ABS_MAJ=0, ABS_EN_COURS=false;
+async function rafraichirAbsences(){
+  if(!db || ABS_EN_COURS || Date.now()-ABS_MAJ < 20000) return false;
+  ABS_EN_COURS=true;
+  try{
+    const a=await db.doc('pub/abs').get();
+    if(a.exists){
+      const avant=JSON.stringify(D.abs||[]).length;
+      D.absSem=a.data.sem||[];
+      const r=await db.collection('abs').get();
+      const liste=[]; r.docs.forEach(x=>{ (x.data&&x.data.liste||[]).forEach(l=>liste.push(l)); });
+      D.abs=liste;
+      ABS_MAJ=Date.now();
+      return JSON.stringify(liste).length!==avant;
+    }
+  }catch(e){ console.error('absences', e); }
+  finally{ ABS_EN_COURS=false; }
+  return false;
+}
 function afficherAbs(){
+  /* relecture en tâche de fond : si le relevé a bougé, on réaffiche */
+  rafraichirAbsences().then(change=>{ if(change && !$('vueAbs').hidden) afficherAbs(); });
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
   $('vueEfm').hidden=true; $('btnImp').hidden=true; $('vueAbs').hidden=false;
   const sem=semAbs(), nb=sem.length;
@@ -1197,6 +1237,7 @@ function brancherClicsGrilleAbs(box, iG, sem, pointage){
 async function detailAbsJourFormateur(iG){
   const box=$('detailAbsJourF'); if(!box) return;
   const nbSem=(D.semaines||[]).length;
+  if(ABS_NAV_F.sem==null || !ABS_NAV_F.vu){ ABS_NAV_F.sem=semaineDuJourPub(); ABS_NAV_F.vu=true; }
   box.innerHTML=navSemaineHtml(ABS_NAV_F, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
   brancherNavSemaine(box, ABS_NAV_F, ()=>detailAbsJourFormateur(iG));
   const cle=box.querySelector('.zoneRes');
@@ -1700,6 +1741,7 @@ async function afficherAbsJourAdmin(){
   if(ABS_JOUR_ADMIN_GI===null || !D.G[ABS_JOUR_ADMIN_GI]) ABS_JOUR_ADMIN_GI = D.G.length? 0 : null;
   const gs=[...D.G.keys()].sort((a,b)=>D.G[a][0].localeCompare(D.G[b][0]));
   const nbSem=(D.semaines||[]).length;
+  if(ABS_NAV_ADMIN.sem==null || !ABS_NAV_ADMIN.vu){ ABS_NAV_ADMIN.sem=semaineDuJourPub(); ABS_NAV_ADMIN.vu=true; }
   const selGrp='<select id="absJourAdminGrp" style="font-size:12.5px;padding:8px 10px;border-radius:9px;'+
     'border:1px solid var(--ligne);background:var(--papier);color:var(--encre);margin:14px 0 0">'+
     gs.map(gi=>`<option value="${gi}" ${gi===ABS_JOUR_ADMIN_GI?'selected':''}>${D.G[gi][0]} — ${D.G[gi][1]||''}</option>`).join('')+
