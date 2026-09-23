@@ -163,6 +163,11 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
     <div class="txt">
       <h1>ISTA Hay Riad — Suivi d'absence</h1>
       <p id="piedEtat">Chargement…</p>
+      <!-- Date/heure et repère de version, en petit sous « Emplois publiés »
+           (demande du 23/09/2026 : le gros bandeau de date entre les
+           pastilles de la tournée a été retiré). Le repère de version sert
+           à vérifier que GitHub Pages a bien republié après un dépôt. -->
+      <p class="piedPetit"><span id="dateAujourdhui"></span> · <span id="heureActuelle"></span> · version 23/09 v1</p>
     </div>
   </header>
 
@@ -192,10 +197,6 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
            du 23/09/2026, suite). -->
       <div id="agentSemaines" class="chipsRow"></div>
       <div id="agentJours" class="chipsRow"></div>
-      <div class="jourBandeau">
-        <div class="date" id="dateAujourdhui"></div>
-        <div class="heure" id="heureActuelle"></div>
-      </div>
       <div class="creneaux" id="boutonsCreneaux"></div>
       <div id="listeFormateurs"></div>
       <button class="lien-retour" id="btnDeconnexionAgent">← changer d'appareil / se déconnecter</button>
@@ -524,9 +525,11 @@ async function demarrerTournee(){
   afficherSalles();
 }
 /* Semaines en haut, jours en dessous — même disposition que l'espace
-   responsable (renderNavAdmin), demande du 23/09/2026. */
+   responsable (renderNavAdmin), demande du 23/09/2026. Seules les semaines
+   dont l'emploi est publié apparaissent (revient sur le § 18/09 « toujours
+   42 » : demande du 23/09/2026, ne pas proposer une semaine sans emploi). */
 function renderNavAgent(){
-  const nSem=Math.max(42, META.nbSem||0, (META.lundis||[]).length);
+  const nSem=Math.max(1, META.nbSem||0, (META.lundis||[]).length);
   const semBox=$('agentSemaines');
   semBox.innerHTML=Array.from({length:nSem},(_,w)=>
     `<button class="${w===AGENT_SW?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
@@ -780,10 +783,9 @@ async function demarrerAdmin(){
   await chargerVueAdmin();
 }
 function renderNavAdmin(){
-  /* Toujours 42 semaines proposées (calendrier complet de l'année), même si
-     seules les premières ont été publiées jusqu'ici — demande du
-     18/09/2026 : les boutons ne doivent pas se limiter à ce qui existe déjà. */
-  const nSem=Math.max(42, META.nbSem||0, (META.lundis||[]).length);
+  /* Seules les semaines dont l'emploi est publié apparaissent (revient sur
+     le § 18/09 « toujours 42 semaines » : demande du 23/09/2026). */
+  const nSem=Math.max(1, META.nbSem||0, (META.lundis||[]).length);
   const semBox=$('admSemaines');
   semBox.innerHTML=Array.from({length:nSem},(_,w)=>
     `<button class="${w===ADMIN_SEM?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
