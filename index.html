@@ -1448,6 +1448,288 @@ async function dessinerPdf(dataUrl, boite){
     boite.innerHTML='Impossible d\'afficher ce PDF ('+(err.message||err)+'). Demandez au formateur une photographie du bulletin.';
   }
 }
+
+/* ================= ATTESTATION REMPLIE À PARTIR DU BULLETIN (24/09/2026) =================
+   Demande explicite : un formateur qui joint son bulletin de paie (PDF, pas une photo)
+   obtient une attestation de travail/salaire déjà remplie, retrouvée aussi côté
+   administrateur avec la demande. Le texte reproduit exactement celui du modèle fourni
+   (Réf. OFP/DR-RSK/CF-HR/ISTA HR/ATT-T) — SANS le papier en-tête/logo officiel : c'est le
+   contenu qui est rempli automatiquement, pas la mise en page graphique de l'office.
+   Le numéro de référence (« N°… /2026 ») reste à la main de l'administrateur, qui le
+   tient à jour lui-même — rien dans l'application ne permet de le déduire. */
+let JSZIP_P=null;
+function chargerJSZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  if(JSZIP_P) return JSZIP_P;
+  JSZIP_P=new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload=()=>ok(window.JSZip);
+    s.onerror=()=>ko(new Error('générateur de document indisponible'));
+    document.head.appendChild(s);
+  });
+  return JSZIP_P;
+}
+/* Catégorie déduite de l'échelon du bulletin (barème donné par l'utilisateur le
+   24/09/2026) : A > 22 · B 19-21 · C 16-18 · D 14-15 · E < 14 — le chevauchement à 16
+   (entre C et D dans l'énoncé) tranché en faveur de C, confirmé par l'exemple réel du
+   modèle (ALOUAH AICHA, catégorie C, échelon 16). */
+function categorieDepuisEchelon(ech){
+  const e=parseInt(ech,10);
+  if(!isFinite(e)) return '';
+  if(e>=22) return 'A';
+  if(e>=19) return 'B';
+  if(e>=16) return 'C';
+  if(e>=14) return 'D';
+  return 'E';
+}
+/* Nombre en toutes lettres françaises (règle 1990, traits d'union) — vérifié contre
+   les montants déjà écrits à la main dans le modèle (11 696,70 → « Onze mille six cent
+   quatre-vingt-seize dirhams et soixante-dix centimes », etc.), tous retrouvés à l'identique. */
+function centainesEnMots(n){
+  const unites=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix',
+    'onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
+  const dizaines=['','dix','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
+  let mots='';
+  const c=Math.floor(n/100), r=n%100;
+  if(c>0){ mots+=(c>1?unites[c]+' cent':'cent'); if(c>1 && r===0) mots+='s'; if(r>0) mots+=' '; }
+  if(r>0){
+    if(r<20) mots+=unites[r];
+    else{
+      const d=Math.floor(r/10), u=r%10;
+      if(d===7||d===9) mots+=dizaines[d]+'-'+unites[10+u];
+      else{
+        mots+=dizaines[d];
+        if(u===1 && d!==8) mots+=' et un';
+        else if(u>0) mots+='-'+unites[u];
+        else if(d===8) mots+='s';
+      }
+    }
+  }
+  return mots;
+}
+function nombreEnMots(n){
+  if(n===0) return 'zéro';
+  const tranches=[[1000000000,'milliard'],[1000000,'million'],[1000,'mille']];
+  let reste=n, mots='';
+  for(const [val,nom] of tranches){
+    const q=Math.floor(reste/val);
+    if(q>0){
+      mots += (nom==='mille') ? (q>1?centainesEnMots(q)+' ':'')+'mille '
+                               : (q>1?centainesEnMots(q)+' '+nom+'s':'un '+nom)+' ';
+      reste%=val;
+    }
+  }
+  if(reste>0) mots+=centainesEnMots(reste);
+  return mots.trim().replace(/\s+/g,' ');
+}
+function montantEnLettres(valeur){
+  const dh=Math.floor(valeur+1e-9);
+  const centimes=Math.round((valeur-dh)*100);
+  const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+  let s=cap(nombreEnMots(dh))+' dirham'+(dh>1?'s':'');
+  if(centimes>0) s+=' et '+nombreEnMots(centimes)+' centime'+(centimes>1?'s':'');
+  return s+'.';
+}
+const MOIS_LETTRES=['janvier','février','mars','avril','mai','juin','juillet','août',
+  'septembre','octobre','novembre','décembre'];
+/* Lecture du bulletin (PDF texte, pas un scan) : chaque valeur est cherchée dans la
+   même colonne que son étiquette (x proche), sur la ligne juste en dessous (y plus
+   petit qu'elle — repère PDF, l'origine est en bas de page) — la mise en page du
+   bulletin est un tableau, étiquettes puis valeurs alignées par colonne, jamais
+   l'une juste après l'autre dans le texte. Vérifié champ par champ sur un bulletin réel. */
+async function extraireChampsBulletin(dataUrl){
+  const lib=await chargerPdfJs();
+  const b64=dataUrl.split(',')[1]||'';
+  const bin=atob(b64); const octets=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) octets[i]=bin.charCodeAt(i);
+  const pdf=await lib.getDocument({data:octets}).promise;
+  const page=await pdf.getPage(1);
+  const content=await page.getTextContent();
+  const items=content.items.map(it=>({texte:(it.str||'').trim(), x:it.transform[4], y:it.transform[5]})).filter(it=>it.texte);
+  const valeur=(etiquette, toleranceX)=>{
+    const lab=items.find(it=>it.texte===etiquette);
+    if(!lab) return '';
+    let meilleur=null, meilleureDist=Infinity;
+    items.forEach(it=>{
+      if(it===lab || Math.abs(it.x-lab.x)>toleranceX || it.y>=lab.y) return;
+      const dist=lab.y-it.y;
+      if(dist<meilleureDist){ meilleureDist=dist; meilleur=it; }
+    });
+    return meilleur ? meilleur.texte : '';
+  };
+  const periode=valeur('PERIODE',30);                  // « 05/26 »
+  const [moisNum, anneeCourte]=periode.split('/');
+  const mIdx=parseInt(moisNum,10)-1;
+  const dateRecrutBrute=valeur('DATE DE RECRUT.',40);   // « 01/06/97 »
+  let dateRecrut=dateRecrutBrute;
+  if(/^\d{2}\/\d{2}\/\d{2}$/.test(dateRecrutBrute)){
+    const yy=+dateRecrutBrute.slice(6,8);
+    dateRecrut=dateRecrutBrute.slice(0,6)+(yy>30?'19':'20')+dateRecrutBrute.slice(6,8);
+  }
+  const salaireTxt=valeur('SALAIRE BRUT',40);           // « 31 659,20 »
+  const salaireNum=parseFloat(salaireTxt.replace(/\s/g,'').replace(',','.'))||0;
+  return {
+    matricule: valeur('MATRICULE',30),
+    nom: valeur('NOM ET PRENOM',80),
+    echelon: valeur('ECH',20),
+    dateRecrut,
+    dateRecrutBrute,
+    mois: mIdx>=0 && mIdx<12 ? MOIS_LETTRES[mIdx] : '',
+    annee: anneeCourte ? (+anneeCourte>30?'19':'20')+anneeCourte : '',
+    salaireTxt, salaireNum
+  };
+}
+/* Construit le .docx (paragraphes simples, pas le papier en-tête officiel — voir note
+   plus haut) à partir des champs, retenus ou corrigés par le formateur avant envoi. */
+async function construireAttestationDocx(type, c){
+  const JSZip=await chargerJSZip();
+  const zip=new JSZip();
+  const auj=new Date();
+  const dateDuJour=String(auj.getDate()).padStart(2,'0')+'/'+String(auj.getMonth()+1).padStart(2,'0')+'/'+auj.getFullYear();
+  const cat=categorieDepuisEchelon(c.echelon);
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const P=(t,opts)=>{ opts=opts||{};
+    const rpr='<w:rPr>'+(opts.b?'<w:b/>':'')+(opts.sz?'<w:sz w:val="'+opts.sz+'"/>':'')+'</w:rPr>';
+    return '<w:p><w:pPr>'+(opts.jc?'<w:jc w:val="'+opts.jc+'"/>':'')+'<w:spacing w:after="200"/></w:pPr>'
+      +'<w:r>'+rpr+'<w:t xml:space="preserve">'+esc(t)+'</w:t></w:r></w:p>';
+  };
+  let paras='';
+  paras+=P('Rabat le '+dateDuJour, {jc:'right'});
+  paras+=P('Réf : OFP/DR-RSK/CF-HR/ISTA HR/ATT-T/N° ………… /'+auj.getFullYear(), {});
+  paras+=P(type==='salaire' ? 'ATTESTATION DE SALAIRE' : 'ATTESTATION DE TRAVAIL', {b:true, sz:28, jc:'center'});
+  paras+=P('Nous soussignés Office de la Formation Professionnelle et de la Promotion du Travail, attestons que :', {});
+  paras+=P('Mr/Mme : '+c.nom, {});
+  paras+=P('Matricule : '+c.matricule, {});
+  if(type==='salaire'){
+    paras+=P('est employé(e) au Complexe de Formation Hay Riad Rabat en qualité de Formateur, et perçoit un '
+      +'Salaire Mensuel Brut de : ('+c.salaireTxt+' Dirhams) (Selon le bulletin de paie du mois de '
+      +c.mois+' '+c.annee+')', {});
+    paras+=P(montantEnLettres(c.salaireNum), {});
+    paras+=P('L’intéressé(e) perçoit un treizième mois et une prime annuelle selon son rendement.', {});
+  } else {
+    paras+=P('est employé (e) au sein de nos services depuis le : '+c.dateRecrut, {});
+    paras+=P('en qualité de : Formateur', {});
+    paras+=P('Catégorie : '+cat+'/'+c.echelon, {});
+    paras+=P('Affectation : Complexe de Formation Hay Riad Rabat', {});
+  }
+  paras+=P('La présente attestation est délivrée à l’intéressé (e) pour servir et valoir ce que de droit.', {});
+  const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+paras
+    +'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1418" w:right="1418" w:bottom="1418" w:left="1418" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    +'<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="24"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>'
+    +'<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:pPrDefault></w:docDefaults>'
+    +'<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>';
+  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    +'<Default Extension="xml" ContentType="application/xml"/>'
+    +'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    +'<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
+  const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+  const drels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+  zip.file('[Content_Types].xml', ct);
+  zip.file('_rels/.rels', rels);
+  zip.file('word/document.xml', doc);
+  zip.file('word/styles.xml', styles);
+  zip.file('word/_rels/document.xml.rels', drels);
+  return await zip.generateAsync({type:'base64'});
+}
+
+/* Numéro de référence auto-incrémenté (demande explicite du 24/09/2026) : commence à
+   10, +1 à chaque attestation générée (travail ou salaire confondus), conservé dans
+   Firestore. Rangé dans la collection « dem » (matricule réservé « _ref », jamais un
+   vrai matricule) — PAS dans « pub », dont l'écriture exige une connexion Firebase que
+   le formateur n'a pas ; « dem » est déjà ouverte en lecture/écriture pour ses demandes.
+   Lecture puis écriture simple, comme le reste de l'application — pas de transaction
+   disponible dans cet adaptateur ; un risque de collision existe si deux formateurs
+   génèrent à la même seconde, accepté comme ailleurs dans l'application. */
+async function prochainNumeroAttestation(){
+  if(!db) return '…';
+  try{
+    const d=await db.doc('dem/_ref').get();
+    const dernier=(d.data && typeof d.data.n==='number') ? d.data.n : 9;
+    const n=dernier+1;
+    await db.doc('dem/_ref').set({n});
+    return n;
+  }catch(e){ return '…'; }
+}
+function remplacerUneFois(s, ancien, nouveau){
+  const i=s.indexOf(ancien);
+  return i<0 ? s : s.slice(0,i)+nouveau+s.slice(i+ancien.length);
+}
+/* Reproduit le VRAI modèle officiel (en-tête, logo, mise en page) — demande explicite
+   du 24/09/2026, après un premier essai en texte simple sans habillage. Le modèle
+   (déposé une fois pour toutes, `modele-attestation.docx`, à côté de la page) contient
+   déjà deux attestations remplies (ALOUAH AICHA) qui servent de gabarit : ses pages 1
+   et 2 sont isolées (entre le début du corps et la 3ᵉ occurrence de « Réf », qui marque
+   le début de l'archive suivante), puis chaque valeur y est remplacée par la nouvelle —
+   texte exact retrouvé par lecture directe du .docx, run par run (Word fragmente
+   souvent un même nombre sur plusieurs balises <w:t> : le motif consiste à injecter la
+   nouvelle valeur dans le premier fragment et à vider les suivants, jamais à toucher
+   autre chose dans le XML). Si la lecture du modèle échoue pour une raison quelconque,
+   on retombe sur l'attestation texte simple (construireAttestationDocx) plutôt que de
+   bloquer l'envoi de la demande. */
+async function construireAttestationOfficielle(type, c, numeroRef){
+  const JSZip=await chargerJSZip();
+  const buf=await (await fetch('modele-attestation.docx')).arrayBuffer();
+  const zipModele=await JSZip.loadAsync(buf);
+  const xmlComplet=await zipModele.file('word/document.xml').async('string');
+  const refs=[...xmlComplet.matchAll(/Réf/g)];
+  const debutParagraphe=idx=>Math.max(xmlComplet.lastIndexOf('<w:p ', idx), xmlComplet.lastIndexOf('<w:p>', idx));
+  const bodyIdx=xmlComplet.indexOf('<w:body>')+'<w:body>'.length;
+  /* Isolées SÉPARÉMENT (24/09/2026, correctif) : la page 1 (travail) va du début du
+     corps à la 2ᵉ occurrence de « Réf » (début de la page 2, salaire) ; la page 2 va
+     de là à la 3ᵉ occurrence (début de l'archive suivante). Un premier essai gardait
+     les deux pages ensemble : une demande « Attestation de travail » embarquait alors
+     la page « Attestation de salaire » avec les données ORIGINALES du modèle (le
+     salaire d'ALOUAH AICHA) — corrigé en ne gardant que la page demandée. */
+  const finPage1 = refs.length>=2 ? debutParagraphe(refs[1].index) : (refs.length>=1 ? xmlComplet.lastIndexOf('<w:sectPr') : bodyIdx);
+  const finPage2 = refs.length>=3 ? debutParagraphe(refs[2].index) : xmlComplet.lastIndexOf('<w:sectPr');
+  let slice = type==='travail' ? xmlComplet.substring(bodyIdx, finPage1) : xmlComplet.substring(finPage1, finPage2);
+  const rootTag=xmlComplet.match(/<w:document[^>]*>/)[0];
+  const sectPr=xmlComplet.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/)[0];
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const auj=new Date();
+  const dateDuJour=String(auj.getDate()).padStart(2,'0')+'/'+String(auj.getMonth()+1).padStart(2,'0')+'/'+auj.getFullYear();
+  const cat=categorieDepuisEchelon(c.echelon);
+
+  /* ORDRE IMPORTANT : les remplacements « chirurgicaux » à runs multiples (Catégorie,
+     Salaire, mois, année) d'abord, TANT QUE le texte d'origine du modèle est encore
+     intact — sinon, si le numéro de référence choisi coïncide par hasard avec un texte
+     déjà substitué (ex. Réf « 11 » = même texte que le premier fragment du salaire
+     « 11 696,70 »), le remplacement générique fait plus bas peut se confondre avec le
+     mauvais fragment. Trouvé en testant avec numeroRef=11 (24/09/2026). */
+  if(type==='travail'){
+    slice=slice.split('03/01/2022').join(esc(c.dateRecrut));
+    slice=slice.replace(/<w:t>C<\/w:t>[\s\S]*?<w:t>6<\/w:t><\/w:r>/,
+      '<w:t xml:space="preserve">'+esc(cat)+'/'+esc(c.echelon)+'</w:t></w:r>');
+  } else {
+    slice=slice.replace(/<w:t>11<\/w:t>[\s\S]*?<w:t>70<\/w:t><\/w:r>/,
+      '<w:t xml:space="preserve">'+esc(c.salaireTxt)+'</w:t></w:r>');
+    /* « mois d'AOUT » : l'élision (d') ne vaut que devant une voyelle (avril, août…) ;
+       un autre mois (mai, juin…) commence par une consonne et prend « de ». */
+    const moisMaj=esc((c.mois||'').toUpperCase());
+    const elision=/^[AEIOUÉÈÊ]/.test(moisMaj);
+    slice=slice.replace('d’AOUT ', (elision?'d’':'de ')+moisMaj+' ');
+    slice=slice.replace(/<w:t>202<\/w:t>[\s\S]*?<w:t>6<\/w:t><\/w:r>/,
+      '<w:t xml:space="preserve">'+esc(c.annee)+'</w:t></w:r>');
+    slice=slice.split('Onze mille six cent quatre-vingt-seize dirhams et soixante-dix centimes.')
+      .join(montantEnLettres(c.salaireNum));
+  }
+  slice=slice.split('ALOUAH AICHA').join(esc(c.nom));
+  slice=slice.split('18298').join(esc(c.matricule));
+  slice=slice.split('17/09/2026').join(dateDuJour);
+  slice=slice.split('<w:t>10</w:t>').join('<w:t>'+esc(numeroRef)+'</w:t>');
+  const nouveauDoc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+rootTag+'<w:body>'+slice+sectPr+'</w:body></w:document>';
+  const zip=await JSZip.loadAsync(buf);   // repart du modèle intact : toutes les autres parties (styles, en-tête, logo…) sont conservées telles quelles
+  zip.file('word/document.xml', nouveauDoc);
+  return await zip.generateAsync({type:'base64'});
+}
+
 /* Demandes de rattrapage reçues : accepter / refuser, avec un mot pour le formateur. */
 /* Direction : toutes les dates d'EFM annoncées par les formateurs */
 async function efmRecus(){
@@ -1547,7 +1829,7 @@ async function demandesRecues(){
       <div class="bloc"><b>${toutes.length}</b><span>demandes</span></div>
       <div class="bloc"><b>${attente}</b><span>en attente</span></div>
     </div>
-    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>Objet</th><th>Bulletin</th><th>État</th></tr>
+    <table class="efm"><tr><th>Date</th><th>Formateur</th><th>Objet</th><th>Bulletin</th><th>Attestation remplie</th><th>État</th></tr>
     ${toutes.map(x=>`<tr${x.etat==='Traitée'?' class="passe"':''}>
       <td class="jour">${jjmm(x.date)}</td>
       <td class="mod">${x.nom||'—'}<span class="det">${x.matricule||x.ref}</span></td>
@@ -1556,12 +1838,31 @@ async function demandesRecues(){
             ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
                  data-voir="${x.ref}" data-rang="${x.rang}">Voir le bulletin</button>`
             : '<span style="color:var(--alerte)">absent</span>'}</td>
+      <td>${x.attestation
+            ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
+                 data-att="${x.ref}" data-rang="${x.rang}">Télécharger (.docx)</button>`
+            : '<span style="color:var(--ink-soft,#777)">à remplir à la main</span>'}</td>
       <td>${x.etat==='Traitée'
             ? '<span class="pastille fait">Traitée</span>'
             : `<button class="action" style="padding:5px 10px;font-size:12px"
                  data-traiter="${x.ref}" data-rang="${x.rang}">Marquer traitée</button>`}</td>
     </tr>`).join('')}
     </table>`;
+  box.querySelectorAll('[data-att]').forEach(b=>{
+    b.onclick=async()=>{
+      const d=await db.doc('dem/'+b.dataset.att).get();
+      const x=((d.data||{}).liste||[])[+b.dataset.rang];
+      if(!x || !x.attestation) return;
+      /* Numéro de référence non déduit automatiquement (voir la note dans
+         construireAttestationDocx) — l'administrateur le complète à la main
+         avant de remettre le document, comme le reste de la mise en page
+         officielle (en-tête, logo). */
+      const a=document.createElement('a');
+      a.href=x.attestation;
+      a.download=(x.objet||'Attestation').replace(/\s+/g,'_')+'_'+(x.matricule||x.ref)+'.docx';
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+  });
   box.querySelectorAll('[data-voir]').forEach(b=>{
     b.onclick=async()=>{
       const d=await db.doc('dem/'+b.dataset.voir).get();
@@ -1848,7 +2149,7 @@ async function ecrireDemandes(mat, o){
   /* un document Firestore ne dépasse pas 1 Mo : on ne conserve le bulletin
      (encodé) que des 4 demandes les plus récentes, l'historique garde le reste */
   const l=(o.liste||[]);
-  l.forEach((x,i)=>{ if(i<l.length-4 && x.contenu) delete x.contenu; });
+  l.forEach((x,i)=>{ if(i<l.length-4){ if(x.contenu) delete x.contenu; if(x.attestation) delete x.attestation; } });
   try{ await db.doc('dem/'+mat).set(o); return true; }catch(e){ return false; }
 }
 /* ------------------------- demande de rattrapage -------------------------
@@ -1995,7 +2296,12 @@ async function afficherDemandes(){
         <label for="fBul">Bulletin de paie — obligatoire</label>
         <input type="file" id="fBul" accept=".pdf,.jpg,.jpeg,.png">
       </div>
-      <p class="note">Une photographie est automatiquement allégée. Un PDF doit rester sous 180 Ko.</p>` : ''}
+      <p class="note">Une photographie est automatiquement allégée. Un PDF doit rester sous 180 Ko.</p>
+      <div id="zoneAttestation" hidden style="border:1px solid var(--ligne);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--papier)">
+        <p class="note" id="attEtat" style="margin:0 0 8px">Lecture du bulletin…</p>
+        <div id="attChamps" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+        <p class="note" style="margin-top:8px">Champs lus dans le bulletin — corrigez-les si besoin avant d'envoyer. L'attestation sera jointe automatiquement à la demande, remplie avec ces valeurs (numéro de référence à ajouter par la direction).</p>
+      </div>` : ''}
       <div class="rangee">
         <button class="action" id="okDem">${enLigne?'Envoyer ma demande':'Préparer le courrier'}</button>
       </div>
@@ -2040,6 +2346,46 @@ async function afficherDemandes(){
     lec.readAsDataURL(fichier);
   });
 
+  /* Extraction automatique dès qu'un bulletin PDF est choisi ET que l'objet est une
+     attestation (les deux le sont ici) — une photo ne peut pas être lue, la zone reste
+     masquée et l'administrateur remplit à la main comme avant. */
+  let champsAttestation=null;
+  if(enLigne && $('fBul')){
+    $('fBul').onchange=async()=>{
+      const zone=$('zoneAttestation'), etat=$('attEtat'), champsBox=$('attChamps');
+      champsAttestation=null;
+      const f=$('fBul').files && $('fBul').files[0];
+      if(!f){ zone.hidden=true; return; }
+      if(f.type!=='application/pdf'){
+        zone.hidden=true;   // photo : rien à lire, pas de blocage
+        return;
+      }
+      zone.hidden=false; etat.className='note'; etat.textContent='Lecture du bulletin…'; champsBox.innerHTML='';
+      try{
+        const dataUrl=await new Promise(r=>{ const l=new FileReader(); l.onload=()=>r(l.result); l.readAsDataURL(f); });
+        const c=await extraireChampsBulletin(dataUrl);
+        if(!c.matricule && !c.nom && !c.salaireNum){
+          etat.textContent='Bulletin non reconnu : l’attestation ne sera pas jointe, la direction la remplira à la main.';
+          return;
+        }
+        const champ=(id,label,val)=>`<div class="champ" style="margin:0"><label for="${id}" style="font-size:11px">${label}</label>
+          <input id="${id}" value="${(val||'').toString().replace(/"/g,'&quot;')}" style="font-size:13px;padding:6px 8px"></div>`;
+        champsBox.innerHTML =
+          champ('attNom','Nom et prénom',c.nom)
+          + champ('attMat','Matricule',c.matricule)
+          + (objDemVal()==='Attestation de salaire'
+              ? champ('attSal','Salaire brut (DH)',c.salaireTxt)+champ('attMois','Mois du bulletin',c.mois+' '+c.annee)
+              : champ('attDate','Employé(e) depuis le',c.dateRecrut)+champ('attEch','Échelon (catégorie '+categorieDepuisEchelon(c.echelon)+')',c.echelon));
+        champsAttestation=c;
+        etat.className='note ok'; etat.textContent='Bulletin lu — vérifiez les champs ci-dessous.';
+      }catch(err){
+        etat.textContent='Lecture automatique impossible ('+(err.message||err)+') : la direction remplira l’attestation à la main à partir du bulletin joint.';
+      }
+    };
+  }
+  function objDemVal(){ return $('objDem') ? $('objDem').value : ''; }
+  if($('objDem')) $('objDem').onchange=()=>{ if($('fBul') && $('fBul').files[0]) $('fBul').onchange(); };
+
   $('okDem').onclick=async()=>{
     const objet=$('objDem').value;
     const e=$('etatDem');
@@ -2072,8 +2418,31 @@ async function afficherDemandes(){
       }
       contenu=await new Promise(r=>{ const l=new FileReader(); l.onload=()=>r(l.result); l.readAsDataURL(f); });
     }
+    /* Attestation remplie automatiquement (24/09/2026) : construite à partir des champs
+       relus/corrigés à l'écran, jointe en base64 à la même demande — l'administrateur la
+       retrouve avec le bulletin, sans repartir de zéro. Absente si le bulletin n'a pas pu
+       être lu (photo, ou format non reconnu) : la demande part quand même. */
+    let attestationB64=null;
+    if(champsAttestation){
+      try{
+        const c={...champsAttestation};
+        if($('attNom')) c.nom=$('attNom').value;
+        if($('attMat')) c.matricule=$('attMat').value;
+        if($('attSal')){ c.salaireTxt=$('attSal').value; c.salaireNum=parseFloat(c.salaireTxt.replace(/\s/g,'').replace(',','.'))||0; }
+        if($('attMois')) [c.mois,c.annee]=($('attMois').value||'').split(' ');
+        if($('attDate')) c.dateRecrut=$('attDate').value;
+        if($('attEch')) c.echelon=$('attEch').value;
+        const type=objet==='Attestation de salaire'?'salaire':'travail';
+        const numeroRef=await prochainNumeroAttestation();
+        let b64;
+        try{ b64=await construireAttestationOfficielle(type, c, numeroRef); }
+        catch(err){ b64=await construireAttestationDocx(type, c); }   // repli si le modèle officiel est illisible
+        attestationB64='data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,'+b64;
+      }catch(err){ attestationB64=null; }
+    }
     const o={liste:(dossier.liste||[]).concat([{objet, date:new Date().toISOString(), etat:'Reçue',
-              nom:profil.libelle, matricule:mat, bulletin:f.name, taille:f.size, contenu}])};
+              nom:profil.libelle, matricule:mat, bulletin:f.name, taille:f.size, contenu,
+              attestation: attestationB64}])};
     const ok=await ecrireDemandes(mat, o);
     if(!ok){ e.className='etat ko';
       return erreur('errDem','L\'envoi a échoué. Le bulletin est peut-être trop lourd : réessayez avec une photographie.'); }
