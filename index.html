@@ -1837,13 +1837,17 @@ async function demandesRecues(){
       <td>${x.contenu
             ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
                  data-voir="${x.ref}" data-rang="${x.rang}">Voir le bulletin</button>`
-            : (x.attestationRef
-                ? '<span style="color:var(--ink-soft,#777)">lu, non conservé</span>'
-                : '<span style="color:var(--alerte)">absent</span>')}</td>
+            : (x.etat==='Traitée'
+                ? '<span style="color:var(--ink-soft,#777)">traitée</span>'
+                : (x.attestationRef
+                    ? '<span style="color:var(--ink-soft,#777)">lu, non conservé</span>'
+                    : '<span style="color:var(--alerte)">absent</span>'))}</td>
       <td>${x.attestationRef
             ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
                  data-att="${x.attestationRef}">Télécharger (.docx)</button>`
-            : '<span style="color:var(--ink-soft,#777)">à remplir à la main</span>'}</td>
+            : (x.etat==='Traitée'
+                ? '<span style="color:var(--ink-soft,#777)">traitée</span>'
+                : '<span style="color:var(--ink-soft,#777)">à remplir à la main</span>')}</td>
       <td>${x.etat==='Traitée'
             ? '<span class="pastille fait">Traitée</span>'
             : `<button class="action" style="padding:5px 10px;font-size:12px"
@@ -1892,12 +1896,13 @@ async function demandesRecues(){
       if(estPdf) dessinerPdf(x.contenu, $('pagesPdf'));
     };
   });
-  /* « Marquer traitée » SUPPRIME la demande (demande du 24/09/2026) : une fois
-     l'attestation téléchargée et signée, la fiche n'a plus d'utilité — la
-     garder ne fait qu'accumuler du poids dans le document Firestore et
-     rapprocher la prochaine demande de la limite de taille (cause du message
-     « l'envoi a échoué »). L'attestation à part (collection demAtt) est
-     supprimée avec elle. */
+  /* « Marquer traitée » (24/09/2026, revu le même jour sur demande explicite :
+     « tu laisses la ligne de la demande traitée mais sans le fichier ») : la
+     LIGNE reste (historique des demandes, formateur ET administrateur), seul
+     le fichier lourd disparaît — bulletin et attestation remplie, devenus
+     inutiles une fois l'attestation téléchargée et signée. C'est ce poids-là
+     qui rapprochait la fiche de la limite de taille Firestore (cause du
+     message « l'envoi a échoué »), pas la ligne elle-même. */
   box.querySelectorAll('[data-traiter]').forEach(b=>{
     b.onclick=async()=>{
       const cle='dem/'+b.dataset.traiter;
@@ -1906,9 +1911,9 @@ async function demandesRecues(){
       const i=+b.dataset.rang;
       const x=l[i];
       if(x){
-        l.splice(i,1);
-        await db.doc(cle).set({...o, liste:l});
         if(x.attestationRef){ try{ await db.doc('demAtt/'+x.attestationRef).delete(); }catch(err){} }
+        l[i]={...x, etat:'Traitée', contenu:null, attestationRef:null};
+        await db.doc(cle).set({...o, liste:l});
       }
       demandesRecues();
     };
