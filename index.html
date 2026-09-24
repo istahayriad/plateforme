@@ -1690,6 +1690,11 @@ async function construireAttestationOfficielle(type, c, numeroRef){
   const finPage1 = refs.length>=2 ? debutParagraphe(refs[1].index) : (refs.length>=1 ? xmlComplet.lastIndexOf('<w:sectPr') : bodyIdx);
   const finPage2 = refs.length>=3 ? debutParagraphe(refs[2].index) : xmlComplet.lastIndexOf('<w:sectPr');
   let slice = type==='travail' ? xmlComplet.substring(bodyIdx, finPage1) : xmlComplet.substring(finPage1, finPage2);
+  /* Page 2 vide (24/09/2026) : le modèle laisse ~15 paragraphes vides en fin de
+     page (place pour une signature) — gardés à leur place dans le document
+     original (deux pages), ils poussaient la page extraite, une fois seule,
+     sur une 2ᵉ page. Retirés (aucun ne contient de texte, jamais de perte). */
+  slice = slice.replace(/(?:<w:p(?:\s[^>]*)?\/>|<w:p(?:\s[^>]*)?>(?:(?!<w:t[\s>])[\s\S])*?<\/w:p>)+$/, '');
   const rootTag=xmlComplet.match(/<w:document[^>]*>/)[0];
   const sectPr=xmlComplet.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/)[0];
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -2356,7 +2361,9 @@ async function afficherDemandes(){
               ? '<span class="pastille fait">✔ Traitée par la direction</span>'
               : '<span class="pastille" style="background:#fdf0dc;color:#8a5a16">⏳ Reçue — en cours de traitement</span>'}
           </div>
-          <div class="det" style="margin-top:6px">Envoyée le ${jjmm(x.date)}${x.bulletin?' · bulletin joint ('+Math.round((x.taille||0)/1024)+' Ko)':''}</div>
+          <div class="det" style="margin-top:6px">Envoyée le ${jjmm(x.date)}${x.contenu
+            ? ' · bulletin joint ('+Math.round((x.taille||0)/1024)+' Ko)'
+            : (x.etat==='Traitée' && x.bulletin ? ' · pièce jointe retirée après traitement' : '')}</div>
         </div>`).join('')
         : '<div class="vide-msg">Aucune demande pour le moment.</div>'}
       ${enLigne?'':'<p class="note">Cette liste est conservée sur cet ordinateur, pour votre mémoire.</p>'}
