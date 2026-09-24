@@ -1837,10 +1837,12 @@ async function demandesRecues(){
       <td>${x.contenu
             ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
                  data-voir="${x.ref}" data-rang="${x.rang}">Voir le bulletin</button>`
-            : '<span style="color:var(--alerte)">absent</span>'}</td>
-      <td>${x.attestation
+            : (x.attestationRef
+                ? '<span style="color:var(--ink-soft,#777)">lu, non conservé</span>'
+                : '<span style="color:var(--alerte)">absent</span>')}</td>
+      <td>${x.attestationRef
             ? `<button class="action fantome" style="padding:5px 10px;font-size:12px"
-                 data-att="${x.ref}" data-rang="${x.rang}">Télécharger (.docx)</button>`
+                 data-att="${x.attestationRef}">Télécharger (.docx)</button>`
             : '<span style="color:var(--ink-soft,#777)">à remplir à la main</span>'}</td>
       <td>${x.etat==='Traitée'
             ? '<span class="pastille fait">Traitée</span>'
@@ -1848,18 +1850,18 @@ async function demandesRecues(){
                  data-traiter="${x.ref}" data-rang="${x.rang}">Marquer traitée</button>`}</td>
     </tr>`).join('')}
     </table>`;
+  /* Le fichier (avec logo, ~250 Ko) est rangé à part de la fiche de demandes
+     (voir okDem plus haut, collection demAtt) : on ne le lit qu'au clic, pas
+     à l'ouverture de la liste — sinon chaque consultation de cette page
+     rapatrierait toutes les attestations d'un coup. */
   box.querySelectorAll('[data-att]').forEach(b=>{
     b.onclick=async()=>{
-      const d=await db.doc('dem/'+b.dataset.att).get();
-      const x=((d.data||{}).liste||[])[+b.dataset.rang];
-      if(!x || !x.attestation) return;
-      /* Numéro de référence non déduit automatiquement (voir la note dans
-         construireAttestationDocx) — l'administrateur le complète à la main
-         avant de remettre le document, comme le reste de la mise en page
-         officielle (en-tête, logo). */
+      const d=await db.doc('demAtt/'+b.dataset.att).get();
+      const x=d.data;
+      if(!x || !x.contenu) return;
       const a=document.createElement('a');
-      a.href=x.attestation;
-      a.download=(x.objet||'Attestation').replace(/\s+/g,'_')+'_'+(x.matricule||x.ref)+'.docx';
+      a.href=x.contenu;
+      a.download=(x.objet||'Attestation').replace(/\s+/g,'_')+'_'+(x.matricule||'')+'.docx';
       document.body.appendChild(a); a.click(); a.remove();
     };
   });
@@ -1890,13 +1892,24 @@ async function demandesRecues(){
       if(estPdf) dessinerPdf(x.contenu, $('pagesPdf'));
     };
   });
+  /* « Marquer traitée » SUPPRIME la demande (demande du 24/09/2026) : une fois
+     l'attestation téléchargée et signée, la fiche n'a plus d'utilité — la
+     garder ne fait qu'accumuler du poids dans le document Firestore et
+     rapprocher la prochaine demande de la limite de taille (cause du message
+     « l'envoi a échoué »). L'attestation à part (collection demAtt) est
+     supprimée avec elle. */
   box.querySelectorAll('[data-traiter]').forEach(b=>{
     b.onclick=async()=>{
       const cle='dem/'+b.dataset.traiter;
       const d=await db.doc(cle).get();
       const o=d.data||{}; const l=(o.liste||[]).slice();
       const i=+b.dataset.rang;
-      if(l[i]){ l[i]={...l[i], etat:'Traitée'}; await db.doc(cle).set({...o, liste:l}); }
+      const x=l[i];
+      if(x){
+        l.splice(i,1);
+        await db.doc(cle).set({...o, liste:l});
+        if(x.attestationRef){ try{ await db.doc('demAtt/'+x.attestationRef).delete(); }catch(err){} }
+      }
       demandesRecues();
     };
   });
@@ -2165,7 +2178,7 @@ async function ecrireDemandes(mat, o){
   /* un document Firestore ne dépasse pas 1 Mo : on ne conserve le bulletin
      (encodé) que des 4 demandes les plus récentes, l'historique garde le reste */
   const l=(o.liste||[]);
-  l.forEach((x,i)=>{ if(i<l.length-4){ if(x.contenu) delete x.contenu; if(x.attestation) delete x.attestation; } });
+  l.forEach((x,i)=>{ if(i<l.length-4 && x.contenu) delete x.contenu; });   // attestationRef est léger, jamais retiré
   try{ await db.doc('dem/'+mat).set(o); return true; }catch(e){ return false; }
 }
 /* ------------------------- demande de rattrapage -------------------------
@@ -2316,7 +2329,7 @@ async function afficherDemandes(){
       <div id="zoneAttestation" hidden style="border:1px solid var(--ligne);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--papier)">
         <p class="note" id="attEtat" style="margin:0 0 8px">Lecture du bulletin…</p>
         <div id="attChamps" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
-        <p class="note" style="margin-top:8px">Champs lus dans le bulletin — corrigez-les si besoin avant d'envoyer. L'attestation sera jointe automatiquement à la demande, remplie avec ces valeurs (numéro de référence à ajouter par la direction).</p>
+        <p class="note" style="margin-top:8px">Champs lus dans le bulletin — corrigez-les si besoin avant d'envoyer. L'attestation sera remplie avec ces valeurs (numéro de référence ajouté automatiquement) et mise à disposition de la direction avec votre demande.</p>
       </div>` : ''}
       <div class="rangee">
         <button class="action" id="okDem">${enLigne?'Envoyer ma demande':'Préparer le courrier'}</button>
@@ -2425,20 +2438,19 @@ async function afficherDemandes(){
       return erreur('errDem','Joignez votre bulletin de paie : la demande ne peut pas être traitée sans lui.');
     const f=inp.files[0];
     e.className='etat'; e.textContent='Envoi en cours…';
-    let contenu=await alleger(f);
-    if(contenu===null){
-      if(f.size>180*1024){
-        e.className='etat ko';
-        return erreur('errDem','Ce PDF pèse '+Math.round(f.size/1024)+' Ko : 180 Ko au maximum. '
-          +'Photographiez le bulletin plutôt que de joindre le PDF, la photo sera allégée automatiquement.');
-      }
-      contenu=await new Promise(r=>{ const l=new FileReader(); l.onload=()=>r(l.result); l.readAsDataURL(f); });
-    }
-    /* Attestation remplie automatiquement (24/09/2026) : construite à partir des champs
-       relus/corrigés à l'écran, jointe en base64 à la même demande — l'administrateur la
-       retrouve avec le bulletin, sans repartir de zéro. Absente si le bulletin n'a pas pu
-       être lu (photo, ou format non reconnu) : la demande part quand même. */
-    let attestationB64=null;
+    /* Attestation remplie automatiquement (24/09/2026, corrigé le même jour) : le
+       fichier avec le VRAI modèle (logo) pèse environ 250 Ko à cause de l'image —
+       trop lourd pour tenir avec le bulletin dans la même fiche Firestore (limite
+       de 1 Mo, quatre demandes gardées) : l'envoi entier échouait silencieusement
+       (« bulletin trop lourd » alors que c'était l'attestation). Un premier essai
+       le téléchargeait directement chez le formateur — refusé par l'utilisateur :
+       le fichier doit rester consultable depuis la page administrateur, pas filer
+       sur l'appareil du formateur. Corrigé : rangé dans un document Firestore À
+       PART (collection demAtt, un document par attestation — voir firestore.rules),
+       jamais dans la fiche de demandes elle-même, qui ne garde qu'un renvoi léger
+       (l'identifiant du document). L'administrateur le récupère au moment du clic
+       sur « Télécharger », pas à l'ouverture de la liste. */
+    let attestationRef=null;
     if(champsAttestation){
       try{
         const c={...champsAttestation};
@@ -2453,12 +2465,33 @@ async function afficherDemandes(){
         let b64;
         try{ b64=await construireAttestationOfficielle(type, c, numeroRef); }
         catch(err){ b64=await construireAttestationDocx(type, c); }   // repli si le modèle officiel est illisible
-        attestationB64='data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,'+b64;
-      }catch(err){ attestationB64=null; }
+        const id=(mat||'x')+'_'+Date.now();
+        await db.doc('demAtt/'+id).set({contenu:'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,'+b64,
+          nom:profil.libelle, matricule:mat, objet, date:new Date().toISOString()});
+        attestationRef=id;
+      }catch(err){ attestationRef=null; }
+    }
+    /* Le bulletin lui-même n'est gardé QUE si l'attestation n'a pas pu être
+       remplie automatiquement (photo, PDF non reconnu) — la direction en a
+       alors besoin pour la remplir à la main. Sinon, les informations lues
+       suffisent : c'était le bulletin gardé sans raison qui faisait dépasser
+       la limite d'une fiche Firestore et faisait échouer l'envoi (demande du
+       24/09/2026 — cas MOUHTAT, bulletin pourtant bien lu). */
+    let contenu=null;
+    if(!attestationRef){
+      contenu=await alleger(f);
+      if(contenu===null){
+        if(f.size>180*1024){
+          e.className='etat ko';
+          return erreur('errDem','Ce PDF pèse '+Math.round(f.size/1024)+' Ko : 180 Ko au maximum. '
+            +'Photographiez le bulletin plutôt que de joindre le PDF, la photo sera allégée automatiquement.');
+        }
+        contenu=await new Promise(r=>{ const l=new FileReader(); l.onload=()=>r(l.result); l.readAsDataURL(f); });
+      }
     }
     const o={liste:(dossier.liste||[]).concat([{objet, date:new Date().toISOString(), etat:'Reçue',
               nom:profil.libelle, matricule:mat, bulletin:f.name, taille:f.size, contenu,
-              attestation: attestationB64}])};
+              attestationRef}])};
     const ok=await ecrireDemandes(mat, o);
     if(!ok){ e.className='etat ko';
       return erreur('errDem','L\'envoi a échoué. Le bulletin est peut-être trop lourd : réessayez avec une photographie.'); }
