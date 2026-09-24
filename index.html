@@ -1976,16 +1976,22 @@ function etatAbsences(){
   box.querySelectorAll('[data-elim]').forEach(b=>{
     b.onclick=()=>{ const d=box.querySelector('[data-noms="'+b.dataset.elim+'"]'); if(d) d.hidden=!d.hidden; };
   });
-  /* liste des groupes pour le filtre de la sous-page Stagiaires, remplie une fois */
+  /* Liste des groupes pour le filtre de la sous-page Stagiaires — limitée à l'année
+     choisie là (etatAn2, PAS etatAn de la sous-page Groupes : deux filtres séparés,
+     demande du 24/09/2026, la liste montrait toujours tous les groupes quelle que
+     soit l'année sélectionnée ici). Reconstruite à chaque changement d'année. */
   const sel=$('etatGrp');
   if(sel){
-    const gs=[...new Set(abs.map(l=>l[0]))].sort();
+    const anF2=($('etatAn2')||{}).value || '__ALL__';
+    const gs=[...new Set(abs.filter(l=>anF2==='__ALL__' || String(anneeDeGroupe(l[0]))===anF2).map(l=>l[0]))].sort();
+    const garder = gs.includes(sel.value) ? sel.value : '__ALL__';
     const html='<option value="__ALL__">Tous les groupes</option>'
-      + gs.map(g=>`<option value="${g}">${g}</option>`).join('');
+      + gs.map(g=>`<option value="${g}" ${g===garder?'selected':''}>${g}</option>`).join('');
     if(sel.innerHTML!==html) sel.innerHTML=html;
     sel.onchange=detailAbsences;
   }
-  const sa2=$('etatAn2'); if(sa2) sa2.onchange=detailAbsences;
+  const sa2=$('etatAn2');
+  if(sa2) sa2.onchange=etatAbsences;   // reconstruit aussi la liste des groupes (voir plus haut)
   const q=$('etatQ'); if(q) q.oninput=detailAbsences;
   detailAbsences();
 }
@@ -2105,22 +2111,32 @@ async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
 
 let ABS_NAV_ADMIN={sem:0};
 let ABS_JOUR_ADMIN_GI=null;      // groupe choisi (gestionnaire/administrateur)
+let ABS_JOUR_ADMIN_AN='__ALL__'; // année choisie, filtre le groupe (24/09/2026)
 /* Gestionnaire ET administrateur (même page « État des absences ») — même
    grille que côté formateur, groupe par groupe (sélecteur, aucun groupe
    « par défaut » n'a de sens ici puisqu'il y en a 50+) — demande du
-   18/09/2026, revue en grille. */
+   18/09/2026, revue en grille. Filtre Année ajouté le 24/09/2026 : le
+   sélecteur Groupe ne propose plus que ceux de l'année choisie. */
 async function afficherAbsJourAdmin(){
   const box=$('zoneJourAbs'); if(!box) return;
-  if(ABS_JOUR_ADMIN_GI===null || !D.G[ABS_JOUR_ADMIN_GI]) ABS_JOUR_ADMIN_GI = D.G.length? 0 : null;
-  const gs=[...D.G.keys()].sort((a,b)=>D.G[a][0].localeCompare(D.G[b][0]));
+  const tousGs=[...D.G.keys()].sort((a,b)=>D.G[a][0].localeCompare(D.G[b][0]));
+  const gs=tousGs.filter(gi=>ABS_JOUR_ADMIN_AN==='__ALL__' || String(anneeDeGroupe(D.G[gi][0]))===ABS_JOUR_ADMIN_AN);
+  if(ABS_JOUR_ADMIN_GI===null || !gs.includes(ABS_JOUR_ADMIN_GI)) ABS_JOUR_ADMIN_GI = gs.length? gs[0] : null;
   const nbSem=(D.semaines||[]).length;
   if(ABS_NAV_ADMIN.sem==null || !ABS_NAV_ADMIN.vu){ ABS_NAV_ADMIN.sem=semaineDuJourPub(); ABS_NAV_ADMIN.vu=true; }
-  const selGrp='<select id="absJourAdminGrp" style="font-size:12.5px;padding:8px 10px;border-radius:9px;'+
-    'border:1px solid var(--ligne);background:var(--papier);color:var(--encre);margin:14px 0 0">'+
-    gs.map(gi=>`<option value="${gi}" ${gi===ABS_JOUR_ADMIN_GI?'selected':''}>${D.G[gi][0]} — ${D.G[gi][1]||''}</option>`).join('')+
+  const champStyle='font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)';
+  const opt=(v,l)=>`<option value="${v}" ${v===ABS_JOUR_ADMIN_AN?'selected':''}>${l}</option>`;
+  const selAn='<select id="absJourAdminAn" style="'+champStyle+';margin:14px 8px 0 0">'
+    +opt('__ALL__','Toutes les années')+opt('1','1ʳᵉ année')+opt('2','2ᵉ année')+opt('3','3ᵉ année')
+    +'</select>';
+  const selGrp='<select id="absJourAdminGrp" style="'+champStyle+';margin:14px 0 0">'+
+    (gs.length ? gs.map(gi=>`<option value="${gi}" ${gi===ABS_JOUR_ADMIN_GI?'selected':''}>${D.G[gi][0]} — ${D.G[gi][1]||''}</option>`).join('')
+               : '<option value="">Aucun groupe pour cette année</option>')+
     '</select>';
-  if(ABS_JOUR_ADMIN_GI===null){ box.innerHTML='<div class="vide-msg">Aucun groupe publié.</div>'; return; }
-  box.innerHTML=selGrp+navSemaineHtml(ABS_NAV_ADMIN, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+  if(!tousGs.length){ box.innerHTML='<div class="vide-msg">Aucun groupe publié.</div>'; return; }
+  box.innerHTML=selAn+selGrp+navSemaineHtml(ABS_NAV_ADMIN, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+  $('absJourAdminAn').onchange=e=>{ ABS_JOUR_ADMIN_AN=e.target.value; ABS_JOUR_ADMIN_GI=null; afficherAbsJourAdmin(); };
+  if(ABS_JOUR_ADMIN_GI===null){ box.querySelector('.zoneRes').innerHTML='<div class="vide-msg">Aucun groupe pour cette année.</div>'; return; }
   $('absJourAdminGrp').onchange=e=>{ ABS_JOUR_ADMIN_GI=+e.target.value; afficherAbsJourAdmin(); };
   brancherNavSemaine(box, ABS_NAV_ADMIN, afficherAbsJourAdmin);
   const cle=box.querySelector('.zoneRes');
@@ -2375,7 +2391,7 @@ async function afficherDemandes(){
           + champ('attMat','Matricule',c.matricule)
           + (objDemVal()==='Attestation de salaire'
               ? champ('attSal','Salaire brut (DH)',c.salaireTxt)+champ('attMois','Mois du bulletin',c.mois+' '+c.annee)
-              : champ('attDate','Employé(e) depuis le',c.dateRecrut)+champ('attEch','Échelon (catégorie '+categorieDepuisEchelon(c.echelon)+')',c.echelon));
+              : champ('attDate','Employé(e) depuis le',c.dateRecrut)+champ('attEch','Échelle (catégorie '+categorieDepuisEchelon(c.echelon)+')',c.echelon));
         champsAttestation=c;
         etat.className='note ok'; etat.textContent='Bulletin lu — vérifiez les champs ci-dessous.';
       }catch(err){
