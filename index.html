@@ -171,6 +171,37 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
 .carteAbsJour .ligneForm .ic{font-size:13px;}
 .chipsAbsents{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
 .chipAbsent{background:var(--alerte-doux); color:var(--alerte); font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px;}
+
+/* ---- Suivi d'absence : tournée salle par salle (30/09/2026) ---- */
+.compteurTournee{text-align:center; font-size:14px; color:var(--encre-doux); margin:4px 0 14px;}
+.grilleSalles{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;}
+.tuileSalle{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 4px;
+  border-radius:14px; border:2px solid var(--ligne); background:var(--carte); box-shadow:var(--ombre); min-height:64px; gap:2px;}
+.tuileSalle .num{font-size:12px; font-weight:600; color:var(--encre-doux); text-align:center; line-height:1.2;}
+.tuileSalle .grp{font-family:'Archivo',sans-serif; font-size:16px; font-weight:800; color:var(--encre); text-align:center; line-height:1.2;}
+.tuileSalle.faite{border-color:var(--vert); background:var(--vert);}
+.tuileSalle.faite .num, .tuileSalle.faite .grp{color:#fff;}
+.tuileSalle.abscol{border-color:var(--alerte); background:var(--alerte);}
+.tuileSalle.abscol .num, .tuileSalle.abscol .grp{color:#fff;}
+.tuileSalle.nonrens{border-color:#C97A1F; background:#C97A1F;}
+.tuileSalle.nonrens .num, .tuileSalle.nonrens .grp{color:#fff;}
+.ligneFT{background:var(--carte); border:1px solid var(--ligne); border-radius:14px; padding:16px; margin-top:12px; box-shadow:var(--ombre);}
+.ligneFT .nom{font-family:'Archivo',sans-serif; font-size:17px; font-weight:800;}
+.ligneFT .nom .effectif{font-size:11.5px; font-weight:600; color:var(--encre-doux); background:var(--bleu-doux); border-radius:999px; padding:3px 10px; margin-left:6px;}
+.ligneFT .det{font-size:13px; color:var(--encre-doux); margin-top:2px;}
+.voletLabelT{font-size:12px; font-weight:700; color:var(--encre-doux); margin-top:14px;}
+.grilleNomsT{display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:6px; margin-top:6px;}
+.grilleNomsT .nomBtnT{padding:9px 6px; border-radius:9px; border:2px solid var(--ligne); background:var(--papier); font-size:12.5px; font-weight:700; color:var(--encre); text-align:center;}
+.grilleNomsT .nomBtnT.on{border-color:var(--alerte); background:var(--alerte); color:#fff;}
+.toutPresentT{width:100%; margin-top:12px; padding:12px; border-radius:12px; border:2px solid var(--ligne); background:var(--papier); font-size:13.5px; font-weight:700; color:var(--encre-doux);}
+.toutPresentT.on{border-color:var(--vert); background:var(--vert); color:#fff;}
+.collectifT{width:100%; margin-top:8px; padding:14px; border-radius:12px; border:2px solid var(--ligne); background:var(--papier); font-size:14px; font-weight:700; color:var(--encre-doux);}
+.collectifT.on{border-color:var(--alerte); background:var(--alerte); color:#fff;}
+.nonrensT{width:100%; margin-top:8px; padding:14px; border-radius:12px; border:2px solid var(--ligne); background:var(--papier); font-size:14px; font-weight:700; color:var(--encre-doux);}
+.nonrensT.on{border-color:#C97A1F; background:#C97A1F; color:#fff;}
+.pairVAT{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:18px;}
+.pairVAT .validerT{padding:16px 6px; border-radius:14px; border:none; background:var(--vert); color:#fff; font-size:15.5px; font-weight:800; box-shadow:var(--ombre);}
+.pairVAT .annulerT{padding:16px 6px; border-radius:14px; border:2px solid var(--ligne); background:var(--carte); color:var(--encre-doux); font-size:15.5px; font-weight:800;}
 .efm{width:100%; border-collapse:collapse; margin-top:14px; font-size:13.5px;}
 .efm th{text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em;
   text-transform:uppercase; color:var(--encre-doux); font-weight:500; padding:0 10px 8px; border-bottom:1px solid var(--ligne);}
@@ -460,11 +491,13 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
       <button data-sous="stag">Stagiaires</button>
       <button data-sous="inj">Injection du fichier</button>
     </div>
-    <!-- Sous-page 0 : l'application Suivi d'absence (tournée agent + tableau
-         responsable) affichée telle quelle, dans son propre cadre. -->
+    <!-- Sous-page 0 : la tournée elle-même (relevé salle par salle), faite
+         directement ici par le gestionnaire — plus d'application séparée. -->
     <div id="sousTournee">
-      <iframe id="iframeTournee" title="Suivi d'absence" loading="lazy"
-        style="width:100%;height:80vh;border:1px solid var(--ligne);border-radius:12px;margin-top:14px"></iframe>
+      <div id="tSemaines" class="mesgroupes"></div>
+      <div id="tJours" class="mesgroupes" style="margin-top:2px"></div>
+      <div id="tCreneaux" class="mesgroupes" style="margin-top:2px"></div>
+      <div id="tZone" style="margin-top:14px"></div>
     </div>
     <!-- Sous-page 1 : les groupes, du plus absent au moins absent, avec les
          stagiaires éliminés (plus de 50 h). Filtre par année. -->
@@ -2924,6 +2957,300 @@ $('btnDeconnexionAdm').onclick=async()=>{
   $('admContenu').hidden=true; $('admGate').hidden=false;
   vue('Accueil');
 };
+  /* ===================================================================
+     SUIVI D'ABSENCE — tournée intégrée (demande du 30/09/2026)
+     Ce n'est plus une application séparée (suivi-absence.html) ouverte par
+     un agent : c'est le gestionnaire, déjà connecté ici, qui pointe les
+     salles lui-même, directement dans cet onglet. Toutes les données (D)
+     et l'accès Firestore (db) sont ceux déjà chargés par cette page —
+     aucune nouvelle collection, aucun nouveau document de configuration. */
+  const T_BORNES=[[8*60,10*60+30],[10*60+30,13*60],[13*60+30,16*60],[16*60,18*60+30]];
+  const T_DUREE_CRENEAU=2.5;
+  let T_SW=0, T_JOUR=0, T_CRENEAU=0, T_PAR_GROUPE=[], T_SALLE=null, T_ATTENTE={};
+  function T_creneauActuel(){
+    const n=new Date(); const m=n.getHours()*60+n.getMinutes();
+    for(let i=0;i<T_BORNES.length;i++) if(m>=T_BORNES[i][0] && m<=T_BORNES[i][1]) return i;
+    return -1;
+  }
+  function T_semaineJourDuJour(){
+    const ls=(D && D.lundis)||[];
+    const auj=new Date(); auj.setHours(0,0,0,0);
+    for(let w=ls.length-1; w>=0; w--){
+      const diff=Math.round((auj-new Date(ls[w]+'T00:00:00'))/86400000);
+      if(diff>=0 && diff<=5) return {w, jour:diff};
+    }
+    return null;
+  }
+  /* Effectif et liste nominative par groupe, tirés de D.stagiaires (déjà en
+     mémoire, même liste que le reste de la plateforme) — aucune lecture
+     Firestore supplémentaire. */
+  function T_roster(){
+    const eff={}, ros={};
+    (D.stagiaires||[]).forEach(s=>{
+      const nom=s&&s[0], prenom=s&&s[1], g=s&&s[2];
+      if(!g) return;
+      eff[g]=(eff[g]||0)+1;
+      (ros[g]=ros[g]||[]).push([nom||'', prenom||'']);
+    });
+    Object.values(ros).forEach(r=>r.sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1])));
+    return {eff, ros};
+  }
+  function T_clefSalle({type,salleI}){
+    if(type===1) return 'FAD';
+    const m=String((D.S||[])[salleI]||'').match(/\d+/);
+    return m ? +m[0] : 'AUTRE';
+  }
+  async function T_assurerSemaineAbs(weekLabel){
+    const doc=await db.doc('pub/abs').get();
+    const pub=doc.data || {sem:[], groupes:[]};
+    const sem=pub.sem||[];
+    if(sem.includes(weekLabel)) return sem;
+    const nvSem=[...sem, weekLabel];
+    for(const g of (pub.groupes||[])){
+      try{
+        const d2=await db.doc('abs/'+g).get();
+        const liste=((d2.data&&d2.data.liste)||[]).map(l=>{ const h=(l[3]||[]).slice(); h.push(0); return [l[0],l[1],l[2],h,l[4]||'',l[5]||'',l[6]||'']; });
+        await db.doc('abs/'+g).set({liste});
+      }catch(e){}
+    }
+    await db.doc('pub/abs').set({sem:nvSem, groupes:pub.groupes||[]});
+    D.absSem=nvSem;
+    return nvSem;
+  }
+  async function T_ajouterAbsences(nomGroupe, paires){
+    if(!paires.length) return;
+    const weekLabel='S'+(T_SW+1);
+    const sem=await T_assurerSemaineAbs(weekLabel);
+    const widx=sem.indexOf(weekLabel);
+    const d1=await db.doc('abs/'+nomGroupe).get();
+    const liste=(d1.data && d1.data.liste) || [];
+    paires.forEach(([nom,prenom])=>{
+      let row=liste.find(l=>norm(l[1])===norm(nom) && norm(l[2])===norm(prenom));
+      if(!row){ row=[nomGroupe, nom, prenom, sem.map(()=>0), '', '', '']; liste.push(row); }
+      if(row[3].length<sem.length) row[3]=row[3].concat(Array(sem.length-row[3].length).fill(0));
+      row[3][widx]=(row[3][widx]||0)+T_DUREE_CRENEAU;
+    });
+    await db.doc('abs/'+nomGroupe).set({liste});
+    const dp=await db.doc('pub/abs').get();
+    const pub=dp.data || {sem, groupes:[]};
+    const groupes=new Set(pub.groupes||[]); groupes.add(nomGroupe);
+    await db.doc('pub/abs').set({sem, groupes:[...groupes]});
+    ABS_MAJ=0;                    // force la relecture par les autres onglets
+  }
+  async function T_retirerAbsences(nomGroupe, paires){
+    if(!paires.length) return;
+    const weekLabel='S'+(T_SW+1);
+    const dp=await db.doc('pub/abs').get();
+    const pub=dp.data || {sem:[]};
+    const widx=(pub.sem||[]).indexOf(weekLabel);
+    if(widx<0) return;
+    const d1=await db.doc('abs/'+nomGroupe).get();
+    const liste=(d1.data && d1.data.liste) || [];
+    paires.forEach(([nom,prenom])=>{
+      const row=liste.find(l=>norm(l[1])===norm(nom) && norm(l[2])===norm(prenom));
+      if(row && row[3] && row[3][widx]) row[3][widx]=Math.max(0, row[3][widx]-T_DUREE_CRENEAU);
+    });
+    await db.doc('abs/'+nomGroupe).set({liste});
+    ABS_MAJ=0;
+  }
+  function T_demarrer(){
+    const info=T_semaineJourDuJour();
+    T_SW = info ? info.w : 0;
+    T_JOUR = info ? info.jour : 0;
+    const cr=T_creneauActuel();
+    T_CRENEAU = cr>=0 ? cr : 0;
+    T_SALLE=null; T_ATTENTE={};
+    T_renderNav();
+    T_afficherSalles();
+  }
+  function T_renderNav(){
+    const nSem=Math.max(1, (D.lundis||[]).length, (D.semaines||[]).length);
+    $('tSemaines').innerHTML=Array.from({length:nSem},(_,w)=>
+      `<button class="gchip ${w===T_SW?'actif':''}" data-w="${w}">S${w+1}</button>`).join('');
+    $('tSemaines').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      T_SW=+b.dataset.w; T_SALLE=null; T_ATTENTE={}; T_renderNav(); T_afficherSalles();
+    });
+    $('tJours').innerHTML=JOURS.map((j,i)=>
+      `<button class="gchip ${i===T_JOUR?'actif':''}" data-j="${i}">${j}</button>`).join('');
+    $('tJours').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      T_JOUR=+b.dataset.j; T_SALLE=null; T_ATTENTE={}; T_renderNav(); T_afficherSalles();
+    });
+    $('tCreneaux').innerHTML=CRENEAUX.map((c,i)=>
+      `<button class="gchip ${i===T_CRENEAU?'actif':''}" data-c="${i}">${i+1}ᵉ · ${c}</button>`).join('');
+    $('tCreneaux').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      T_CRENEAU=+b.dataset.c; T_SALLE=null; T_ATTENTE={}; T_renderNav(); T_afficherSalles();
+    });
+  }
+  /* ÉCRAN 1 : la grille des salles occupées à ce créneau — même principe que
+     l'ancienne application (tuile par salle, verte = traitée, rouge = classe
+     absente, orange = fiche non renseignée). */
+  async function T_afficherSalles(){
+    const box=$('tZone');
+    box.style.opacity='0.35';
+    const sessions=(D.semaines||[])[T_SW] || [];
+    const ici=sessions.filter(s=>s[1]===T_JOUR && s[2]===T_CRENEAU);
+    const parGroupe=[];
+    ici.forEach(s=>{
+      const fi=s[0], type=s[3], salleI=s[4], groupesI=s[6]||[];
+      if(type===1) return;          // FAD : rien à constater physiquement
+      groupesI.forEach(gi=>parGroupe.push({gi, fi, type, salleI}));
+    });
+    T_PAR_GROUPE=parGroupe;
+    if(!parGroupe.length){ box.innerHTML='<p class="note">Aucun cours en salle à ce créneau.</p>'; box.style.opacity='1'; return; }
+    const dp=await db.doc('pointage/s'+T_SW).get();
+    const pointage=dp.data || {};
+    const cle=T_JOUR+'_'+T_CRENEAU;
+    const marques=pointage[cle] || {};
+    const parSalle={};
+    parGroupe.forEach(l=>{ const k=T_clefSalle(l); (parSalle[k]=parSalle[k]||[]).push(l); });
+    const nPointees=lg=>lg.filter(l=>marques[l.gi]).length;
+    const rangAnnee=a=>a==='3'?0:(a==='2'?1:(a==='1'?2:3));
+    const nomsSalle=n=>parSalle[n].map(l=>(D.G[l.gi]||[])[0]||'groupe '+l.gi).sort((a,b)=>a.localeCompare(b)).join(' · ');
+    const cleTriSalle=n=>{
+      const lg=parSalle[n];
+      const rang=Math.min(...lg.map(l=>rangAnnee(String((D.G[l.gi]||[])[2]||'').trim())));
+      return [rang, nomsSalle(n)];
+    };
+    const salles=Object.keys(parSalle).map(Number).sort((a,b)=>{
+      const [ra,na]=cleTriSalle(a), [rb,nb]=cleTriSalle(b);
+      return ra-rb || na.localeCompare(nb);
+    });
+    const tuiles=salles.map(n=>{
+      const lg=parSalle[n];
+      const complet = nPointees(lg)===lg.length;
+      const uneAbsence = complet && lg.some(l=>{ const m=marques[l.gi]; return m && m.etat==='absent'; });
+      const toutNonRens = complet && lg.every(l=>{ const m=marques[l.gi]; return m && m.etat==='nonrens'; });
+      const noms=nomsSalle(n);
+      const cls = !complet ? '' : toutNonRens ? 'faite nonrens' : uneAbsence ? 'faite abscol' : 'faite';
+      return `<button class="tuileSalle ${cls}" data-salle="${n}"><span class="grp">${noms}</span><span class="num">Salle ${n}</span></button>`;
+    }).join('');
+    const total=parGroupe.length, totalPointees=parGroupe.filter(l=>marques[l.gi]).length;
+    box.innerHTML = `<div class="compteurTournee">${totalPointees} / ${total} salles traitées</div>
+      <div class="grilleSalles">${tuiles}</div>`;
+    box.style.opacity='1';
+    box.querySelectorAll('.tuileSalle[data-salle]').forEach(btn=>{
+      btn.onclick=()=>{ T_SALLE=+btn.dataset.salle; T_ATTENTE={}; T_afficherSalleDetail(); };
+    });
+  }
+  /* ÉCRAN 2 : détail d'une salle — une carte par groupe, avec la liste des
+     stagiaires (boutons « nom » = coché absent), Tous présents, Absence
+     collective, Fiche non renseignée (30/09/2026), puis Valider/Annuler. */
+  async function T_afficherSalleDetail(){
+    const dp=await db.doc('pointage/s'+T_SW).get();
+    const pointage=dp.data || {};
+    const cle=T_JOUR+'_'+T_CRENEAU;
+    const marques=pointage[cle] || {};
+    const {ros}=T_roster();
+    T_PAR_GROUPE.filter(l=>T_clefSalle(l)===T_SALLE).forEach(({gi,fi})=>{
+      if(T_ATTENTE[gi]) return;
+      const nomGroupe=(D.G[gi]||[])[0]||'groupe '+gi;
+      const roster=ros[nomGroupe]||[];
+      const sauve=marques[gi];
+      const absentsIdx=new Set();
+      (Array.isArray(sauve && sauve.absents) ? sauve.absents : []).forEach(([nom,prenom])=>{
+        const i=roster.findIndex(([n,p])=>norm(n)===norm(nom) && norm(p)===norm(prenom));
+        if(i>=0) absentsIdx.add(i);
+      });
+      if(sauve) T_ATTENTE[gi]={etat:sauve.etat, absentsIdx, fi};
+    });
+    T_rendreSalleDetail();
+  }
+  function T_rendreSalleDetail(){
+    const box=$('tZone');
+    const cle=T_JOUR+'_'+T_CRENEAU;
+    const lignes=T_PAR_GROUPE.filter(l=>T_clefSalle(l)===T_SALLE);
+    const labelSalle = T_SALLE==='FAD' ? 'À distance' : 'Salle '+T_SALLE;
+    const {eff,ros}=T_roster();
+    const cartes=lignes.map(({gi,fi})=>{
+      const nomGroupe=(D.G[gi]||[])[0]||'groupe '+gi;
+      const nomF=D.nomAff[fi]||(D.F||[])[fi]||'formateur '+fi;
+      const roster=ros[nomGroupe]||[];
+      const enAttente=T_ATTENTE[gi];
+      const absentsIdx = enAttente ? enAttente.absentsIdx : new Set();
+      const etat = enAttente ? enAttente.etat : null;
+      const grilleNoms=roster.map(([nom,prenom],i)=>
+        `<button class="nomBtnT ${absentsIdx.has(i)?'on':''}" data-gi="${gi}" data-fi="${fi}" data-idx="${i}">${prenom} ${nom}</button>`).join('');
+      const effectif=eff[nomGroupe];
+      return `<div class="ligneFT" data-gi="${gi}">
+        <div class="nom">${nomGroupe}${effectif?` <span class="effectif">${effectif} stagiaires</span>`:''}</div>
+        <div class="det">Formateur : ${nomF}</div>
+        ${roster.length?`<div class="voletLabelT">Stagiaires absents</div><div class="grilleNomsT">${grilleNoms}</div>`
+          :`<div class="voletLabelT">Liste des stagiaires non disponible pour ce groupe</div>`}
+        <button class="toutPresentT ${etat==='present'&&!absentsIdx.size?'on':''}" data-gi="${gi}" data-fi="${fi}">Tous présents</button>
+        <button class="collectifT ${etat==='absent'?'on':''}" data-gi="${gi}" data-fi="${fi}">Absence collective</button>
+        <button class="nonrensT ${etat==='nonrens'?'on':''}" data-gi="${gi}" data-fi="${fi}">Fiche non renseignée</button>
+      </div>`;
+    }).join('');
+    box.innerHTML = `<button class="lien-retour" id="btnRetourSalles" style="display:block;text-align:center;margin:0 0 10px;color:var(--encre-doux);font-size:13px;background:none;border:none">← retour aux salles</button>
+      <div style="font-family:'Archivo',sans-serif;font-size:18px;font-weight:800;text-align:center;margin-bottom:8px">${labelSalle}</div>
+      ${cartes}
+      <div class="pairVAT">
+        <button class="validerT" id="btnValiderSalle">✔ Valider</button>
+        <button class="annulerT" id="btnAnnulerSalle">✗ Annuler</button>
+      </div>`;
+    $('btnRetourSalles').onclick=()=>{ T_SALLE=null; T_ATTENTE={}; T_afficherSalles(); };
+    box.querySelectorAll('button.nomBtnT').forEach(btn=>{
+      btn.onclick=()=>{
+        const gi=+btn.dataset.gi, idx=+btn.dataset.idx, fi=+btn.dataset.fi;
+        const cur=T_ATTENTE[gi] || {etat:'present', absentsIdx:new Set(), fi};
+        const s=new Set(cur.absentsIdx); if(s.has(idx)) s.delete(idx); else s.add(idx);
+        T_ATTENTE[gi]={etat:'present', absentsIdx:s, fi};
+        T_rendreSalleDetail();
+      };
+    });
+    box.querySelectorAll('button.toutPresentT').forEach(btn=>{
+      btn.onclick=()=>{ T_ATTENTE[+btn.dataset.gi]={etat:'present', absentsIdx:new Set(), fi:+btn.dataset.fi}; T_rendreSalleDetail(); };
+    });
+    box.querySelectorAll('button.collectifT').forEach(btn=>{
+      btn.onclick=()=>{
+        const gi=+btn.dataset.gi, fi=+btn.dataset.fi;
+        const {ros}=T_roster();
+        const dejaAbsent = T_ATTENTE[gi] && T_ATTENTE[gi].etat==='absent';
+        T_ATTENTE[gi]= dejaAbsent
+          ? {etat:'present', absentsIdx:new Set(), fi}
+          : {etat:'absent', absentsIdx:new Set((ros[(D.G[gi]||[])[0]]||[]).map((_,i)=>i)), fi};
+        T_rendreSalleDetail();
+      };
+    });
+    box.querySelectorAll('button.nonrensT').forEach(btn=>{
+      btn.onclick=()=>{
+        const gi=+btn.dataset.gi, fi=+btn.dataset.fi;
+        const deja = T_ATTENTE[gi] && T_ATTENTE[gi].etat==='nonrens';
+        T_ATTENTE[gi]= deja
+          ? {etat:'present', absentsIdx:new Set(), fi}
+          : {etat:'nonrens', absentsIdx:new Set(), fi};
+        T_rendreSalleDetail();
+      };
+    });
+    $('btnAnnulerSalle').onclick=()=>{ T_ATTENTE={}; T_SALLE=null; T_afficherSalles(); };
+    $('btnValiderSalle').onclick=async()=>{
+      if(!Object.keys(T_ATTENTE).length){ T_SALLE=null; T_afficherSalles(); return; }
+      try{
+        const dp=await db.doc('pointage/s'+T_SW).get();
+        const p=dp.data || {};
+        if(!p[cle]) p[cle]={};
+        const {ros}=T_roster();
+        for(const [gi,v] of Object.entries(T_ATTENTE)){
+          const nomGroupe=(D.G[gi]||[])[0]||'groupe '+gi;
+          const roster=ros[nomGroupe]||[];
+          const paires=[...v.absentsIdx].map(i=>roster[i]).filter(Boolean);
+          const avant=Array.isArray(p[cle][gi] && p[cle][gi].absents) ? p[cle][gi].absents : [];
+          const cleDe=([n,pr])=>norm(n)+'|'+norm(pr);
+          const clesAvant=new Set(avant.map(cleDe));
+          const clesApres=new Set(paires.map(cleDe));
+          const ajoutes=paires.filter(x=>!clesAvant.has(cleDe(x)));
+          const retires=avant.filter(x=>!clesApres.has(cleDe(x)));
+          p[cle][gi]={etat:v.etat, heure:new Date().toISOString(), fi:v.fi, absents:paires};
+          try{ await T_ajouterAbsences(nomGroupe, ajoutes); }catch(e){}
+          try{ await T_retirerAbsences(nomGroupe, retires); }catch(e){}
+        }
+        await db.doc('pointage/s'+T_SW).set(p);
+        T_SALLE=null; T_ATTENTE={};
+        T_afficherSalles();
+      }catch(e){ alert('Enregistrement impossible : vérifiez la connexion internet.'); }
+    };
+  }
+
   /* --- gestionnaire de stagiaires : il ne depose que les absences --------
      La direction garde l espace complet ; le gestionnaire n y voit que le
      fichier des absences, qui est sa seule responsabilite. */
@@ -2944,12 +3271,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
                                : n==='stag' ? 'État des absences par stagiaire'
                                : n==='jour' ? 'État des absences par jour et créneau'
                                : 'Injection de l’état des absences';
-    if(n==='tournee'){
-      /* chargée seulement à l'ouverture de l'onglet, pas à chaque fois */
-      const f=$('iframeTournee');
-      if(!f.src) f.src='suivi-absence.html?embed=1';
-      return;
-    }
+    if(n==='tournee'){ T_demarrer(); return; }
     if(n==='jour'){ afficherAbsJourAdmin(); return; }
     if(n==='inj'){
       const bloc=$('fAbs') && $('fAbs').closest('fieldset');
