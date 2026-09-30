@@ -2947,7 +2947,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
     if(n==='tournee'){
       /* chargée seulement à l'ouverture de l'onglet, pas à chaque fois */
       const f=$('iframeTournee');
-      if(!f.src) f.src='suivi-absence.html';
+      if(!f.src) f.src='suivi-absence.html?embed=1';
       return;
     }
     if(n==='jour'){ afficherAbsJourAdmin(); return; }
