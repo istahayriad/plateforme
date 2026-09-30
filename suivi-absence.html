@@ -157,6 +157,11 @@ table.pointage td{padding:9px 8px; border-top:1px solid var(--ligne);}
 .grilleAbs .qui{display:block; font-weight:700; color:var(--encre); margin-bottom:2px;}
 .grilleAbs .quoi{display:block; color:var(--encre-doux); line-height:1.35;}
 [hidden]{display:none!important;}
+/* mode intégré (?embed=1, depuis l'onglet « Suivi d'absence » de la
+   plateforme) : ni bandeau du haut, ni bouton de déconnexion — seules les
+   pastilles semaines/jours/créneaux et les salles restent visibles. */
+body.embed .tete, body.embed #btnDeconnexionAgent{display:none;}
+body.embed .enveloppe{padding-top:6px;}
 </style>
 
 <div class="enveloppe">
@@ -497,6 +502,13 @@ PC.forEach((inp,i)=>{
 $('btnDeconnexionAgent').onclick=()=>{ vue('Accueil'); };
 
 let AGENT_SW=null, AGENT_JOUR=null, AGENT_CRENEAU=-1;
+/* Reste vrai tant que l'agent n'a touché aucune pastille : l'écran suit alors
+   tout seul le jour et le créneau réels (demande du 24/09/2026 — l'agent
+   laisse son téléphone ouvert toute la journée, sans jamais y retoucher, et
+   l'écran restait bloqué sur le jour/créneau de la connexion, même le
+   lendemain). Un clic sur semaine/jour/créneau l'arrête : l'agent qui
+   consulte volontairement un autre moment n'est plus ramené de force. */
+let AGENT_SUIT_AUJ=true;
 let AGENT_PAR_GROUPE=[];      // toutes les lignes (groupe, créneau) du jour choisi
 let AGENT_SALLE=null;         // salle actuellement ouverte : 1-30, ou 'FAD'
 let AGENT_ATTENTE={};         // choix pas encore validés sur l'écran salle, par groupe
@@ -512,8 +524,8 @@ async function demarrerTournee(){
      affichait l'heure GMT) — sans ce réglage, l'heure suit le fuseau de
      l'appareil, pas celui de l'établissement. */
   const HEURE_OPTS={hour:'2-digit', minute:'2-digit', timeZone:'Africa/Casablanca'};
-  const maj=()=>{ $('heureActuelle').textContent=(new Date()).toLocaleTimeString('fr-FR',HEURE_OPTS); };
-  maj(); setInterval(maj, 30000);
+  const maj=()=>{ $('heureActuelle').textContent=(new Date()).toLocaleTimeString('fr-FR',HEURE_OPTS); suivreAujourdhui(); };
+  AGENT_SUIT_AUJ=true;           // nouvelle connexion : on recommence à suivre le jour réel
   /* Semaine et jour du jour par défaut, mais l'agent peut changer (voir
      renderNavAgent) — sans emploi publié pour aujourd'hui, on démarre quand
      même sur S1/lundi plutôt que de bloquer l'écran. */
@@ -524,6 +536,7 @@ async function demarrerTournee(){
   renderNavAgent();
   AGENT_SALLE=null; AGENT_ATTENTE={};
   afficherSalles();
+  maj(); setInterval(maj, 30000);   // après l'initialisation : suivreAujourdhui() compare à des valeurs déjà posées
 }
 /* Semaines en haut, jours en dessous — même disposition que l'espace
    responsable (renderNavAdmin), demande du 23/09/2026. Seules les semaines
@@ -535,6 +548,7 @@ function renderNavAgent(){
   semBox.innerHTML=Array.from({length:nSem},(_,w)=>
     `<button class="${w===AGENT_SW?'on':''}" data-w="${w}">S${w+1}</button>`).join('');
   semBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_SUIT_AUJ=false;
     AGENT_SW=+b.dataset.w; AGENT_SALLE=null; AGENT_ATTENTE={};
     renderNavAgent(); afficherSalles();
   });
@@ -542,6 +556,7 @@ function renderNavAgent(){
   jourBox.innerHTML=JOURS.map((j,i)=>
     `<button class="${i===AGENT_JOUR?'on':''}" data-j="${i}">${j.charAt(0).toUpperCase()+j.slice(1)}</button>`).join('');
   jourBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_SUIT_AUJ=false;
     AGENT_JOUR=+b.dataset.j; AGENT_SALLE=null; AGENT_ATTENTE={};
     renderNavAgent(); afficherSalles();
   });
@@ -549,11 +564,27 @@ function renderNavAgent(){
   $('boutonsCreneaux').innerHTML=CRENEAUX.map((c,i)=>
     `<button data-cr="${i}" class="${i===actuel?'actuel':''}">${i+1}ᵉ créneau<span class="h">${c}</span></button>`).join('');
   $('boutonsCreneaux').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    AGENT_SUIT_AUJ=false;
     AGENT_CRENEAU=+b.dataset.cr;
     $('boutonsCreneaux').querySelectorAll('button').forEach(x=>x.classList.toggle('actuel', x===b));
     AGENT_SALLE=null; AGENT_ATTENTE={};
     afficherSalles();
   });
+}
+/* Rappelle l'écran au jour/créneau réels, tant que l'agent n'a rien touché
+   (AGENT_SUIT_AUJ) — appelé toutes les 30 s, avec l'horloge. Change la date
+   affichée aussi (auparavant figée à celle de la connexion : un agent resté
+   connecté après minuit restait affiché sur la veille). */
+function suivreAujourdhui(){
+  const auj=new Date();
+  $('dateAujourdhui').textContent=dateLongue(auj);
+  if(!AGENT_SUIT_AUJ || !$('ecranTournee') || $('ecranTournee').hidden) return;
+  const info=semaineEtJourDuJour();
+  const cr=creneauActuel();
+  const nSw = info ? info.w : AGENT_SW, nJour = info ? info.jour : AGENT_JOUR, nCr = cr>=0 ? cr : AGENT_CRENEAU;
+  if(nSw===AGENT_SW && nJour===AGENT_JOUR && nCr===AGENT_CRENEAU) return;
+  AGENT_SW=nSw; AGENT_JOUR=nJour; AGENT_CRENEAU=nCr; AGENT_SALLE=null; AGENT_ATTENTE={};
+  renderNavAgent(); afficherSalles();
 }
 /* Numéro de salle utilisé comme clé d'écran : 1 à 30, ou 'FAD' pour le
    distanciel (pas de salle physique). */
@@ -927,7 +958,13 @@ function syntheseSemaineHtml(sessions, pointage){
 }
 
 /* ------------------------- démarrage ------------------------- */
+/* Mode intégré : la plateforme (espace gestionnaire, déjà protégé par son
+   propre mot de passe) ouvre cette page dans un cadre avec ?embed=1 — on
+   saute directement le code à 4 chiffres et le bandeau/boutons, pour ne
+   garder que les pastilles et les salles. */
+const EMBED = new URLSearchParams(location.search).get('embed')==='1';
 (async function(){
+  if(EMBED) document.body.classList.add('embed');
   await ouvrirFirebase();
   await chargerAcces();
   try{
@@ -937,7 +974,8 @@ function syntheseSemaineHtml(sessions, pointage){
       ? 'Emplois publiés : '+(META.nbSem||0)+' semaines · '+(META.F||[]).length+' formateurs'
       : 'Aucun emploi publié pour le moment.';
   }catch(e){ $('piedEtat').textContent='Connexion au serveur indisponible.'; }
-  verifierAccesSecret();
+  if(EMBED){ $('ecranPin').hidden=true; demarrerTournee(); }
+  else verifierAccesSecret();
 })();
 </script>
 </body></html>
