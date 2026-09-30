@@ -249,6 +249,19 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
 .resume .bloc{border:1px solid var(--ligne); border-radius:10px; padding:9px 14px; background:var(--carte);}
 .resume .bloc b{display:block; font-size:18px; font-family:'IBM Plex Mono',monospace;}
 .resume .bloc span{font-size:11px; color:var(--encre-doux); text-transform:uppercase; letter-spacing:.05em;}
+.resume .bloc.clic{cursor:pointer; flex:1; min-width:120px;}
+.resume .bloc.sel{border-color:var(--bleu); border-width:2px; padding:8px 13px;}
+.blocCreneau{margin-top:14px;}
+.blocCreneau h4{font-size:13px; font-weight:700; color:var(--encre-doux); margin:0 0 8px;}
+table.pointage{width:100%; border-collapse:collapse; font-size:13px;}
+table.pointage th{text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--encre-doux); font-weight:500; padding:0 10px 8px; border-bottom:1px solid var(--ligne);}
+table.pointage td{padding:10px; border-bottom:1px solid var(--ligne); vertical-align:top;}
+.etatT{display:inline-block; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:999px; white-space:nowrap;}
+.etatT.present{background:var(--vert-doux); color:var(--vert);}
+.etatT.absent{background:var(--alerte-doux); color:var(--alerte);}
+.etatT.nonrens{background:#F7E6CF; color:#C97A1F;}
+.etatT.attente{background:var(--bleu-doux); color:var(--bleu);}
 .vide-msg{margin-top:20px; padding:18px; border:1px dashed var(--ligne); border-radius:12px;
   color:var(--encre-doux); font-size:13.5px;}
 .gchip small{display:block; font-family:'IBM Plex Sans',sans-serif; font-size:10px; opacity:.7;}
@@ -605,6 +618,18 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
             </div>
           </fieldset>
         </div>
+        <!-- Suivi d'absence — tournée, en direct (30/09/2026) : on ne
+             raisonne plus sur présent/absent stagiaire mais sur la FICHE
+             du gestionnaire — renseignée (présence relevée, quelle qu'elle
+             soit) ou non renseignée (orange, il n'a pas pu relever). -->
+        <fieldset style="margin-top:14px">
+          <legend>Suivi d'absence — tournée en direct</legend>
+          <p class="note">Ce que les gestionnaires ont relevé salle par salle, semaine par semaine.</p>
+          <div id="atSemaines" class="mesgroupes"></div>
+          <div id="atJours" class="mesgroupes" style="margin-top:2px"></div>
+          <div id="atCreneaux" class="mesgroupes" style="margin-top:2px"></div>
+          <div id="atDetail" style="margin-top:4px"></div>
+        </fieldset>
       </div>
 
       <div class="sous-admin" data-page="dem" hidden>
@@ -3251,6 +3276,143 @@ $('btnDeconnexionAdm').onclick=async()=>{
     };
   }
 
+  /* ===================================================================
+     SUIVI D'ABSENCE — tableau de bord de l'administrateur (30/09/2026)
+     Lecture seule, en direct : ce que les gestionnaires ont relevé. On ne
+     raisonne plus sur présent/absent stagiaire ici (déjà visible dans
+     « État des absences ») mais sur la FICHE du gestionnaire : renseignée
+     (un relevé a bien été fait, présence ou absence collective) ou NON
+     renseignée (orange — il n'a pas pu relever cette salle). */
+  let AT_SEM=0, AT_JOUR=0, AT_CRENEAU=null, AT_FILTRE=null, AT_SESSIONS=[], AT_POINTAGE={};
+  async function AT_demarrer(){
+    if(!D) return;
+    const info=T_semaineJourDuJour();
+    AT_SEM = info ? info.w : 0;
+    AT_JOUR = info ? info.jour : 0;
+    AT_CRENEAU=null; AT_FILTRE=null;
+    AT_renderNav();
+    await AT_charger();
+  }
+  function AT_renderNav(){
+    const nSem=Math.max(1, (D.lundis||[]).length, (D.semaines||[]).length);
+    $('atSemaines').innerHTML=Array.from({length:nSem},(_,w)=>
+      `<button class="gchip ${w===AT_SEM?'actif':''}" data-w="${w}">S${w+1}</button>`).join('');
+    $('atSemaines').querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+      AT_SEM=+b.dataset.w; AT_CRENEAU=null; AT_FILTRE=null; AT_renderNav(); await AT_charger();
+    });
+    $('atJours').innerHTML=JOURS.map((j,i)=>
+      `<button class="gchip ${i===AT_JOUR?'actif':''}" data-j="${i}">${j}</button>`).join('')
+      +`<button class="gchip ${AT_JOUR==='semaine'?'actif':''}" data-j="semaine">📊 Synthèse semaine</button>`;
+    $('atJours').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      AT_JOUR = b.dataset.j==='semaine' ? 'semaine' : +b.dataset.j;
+      AT_CRENEAU=null; AT_FILTRE=null; AT_renderNav(); AT_rendreDetail();
+    });
+    const crBox=$('atCreneaux');
+    if(AT_JOUR==='semaine'){ crBox.innerHTML=''; }
+    else {
+      crBox.innerHTML=CRENEAUX.map((c,i)=>
+        `<button class="gchip ${i===AT_CRENEAU?'actif':''}" data-c="${i}">${i+1}ᵉ créneau</button>`).join('');
+      crBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+        AT_CRENEAU=+b.dataset.c; AT_FILTRE=null; AT_renderNav(); AT_rendreDetail();
+      });
+    }
+  }
+  async function AT_charger(){
+    $('atDetail').innerHTML='<p class="note">Chargement…</p>';
+    AT_SESSIONS=(D.semaines||[])[AT_SEM] || [];
+    try{
+      const dp=await db.doc('pointage/s'+AT_SEM).get();
+      AT_POINTAGE = dp.data || {};
+    }catch(e){ AT_POINTAGE={}; }
+    AT_rendreDetail();
+  }
+  function AT_lignesParGroupe(sessions){
+    const l=[];
+    sessions.forEach(s=>{
+      const fi=s[0], jour=s[1], creneau=s[2], type=s[3], salleI=s[4], groupesI=s[6]||[];
+      if(type===1) return;      // FAD : rien de physique à relever
+      groupesI.forEach(gi=>l.push({fi, jour, creneau, salleI, gi}));
+    });
+    return l;
+  }
+  const AT_marqueDe=(pointage,l)=>{ const c=pointage[l.jour+'_'+l.creneau]; return c && c[l.gi]; };
+  function AT_rendreDetail(){
+    const box=$('atDetail');
+    if(AT_JOUR==='semaine'){ box.innerHTML=AT_syntheseSemaineHtml(AT_SESSIONS, AT_POINTAGE); return; }
+    const ici=AT_lignesParGroupe(AT_SESSIONS).filter(l=>l.jour===AT_JOUR);
+    if(!ici.length){ box.innerHTML='<p class="note">Aucun cours en salle ce jour.</p>'; return; }
+    if(AT_CRENEAU==null){ box.innerHTML='<p class="note">Choisissez un créneau ci-dessus pour voir le détail.</p>'; return; }
+    const dc=ici.filter(l=>l.creneau===AT_CRENEAU);
+    if(!dc.length){ box.innerHTML='<p class="note">Aucun cours en salle à ce créneau.</p>'; return; }
+    /* renseignée = un relevé existe, quel qu'il soit (présence ou absence
+       collective) ; non renseignée = la fiche « non renseignée », orange. */
+    const parEtat={
+      tous: dc,
+      renseigne: dc.filter(l=>{ const m=AT_marqueDe(AT_POINTAGE,l); return m && (m.etat==='present'||m.etat==='absent'); }),
+      nonrens: dc.filter(l=>{ const m=AT_marqueDe(AT_POINTAGE,l); return m && m.etat==='nonrens'; }),
+      attente: dc.filter(l=>!AT_marqueDe(AT_POINTAGE,l))
+    };
+    let html=`<div class="resume">
+        <div class="bloc clic ${AT_FILTRE==='tous'?'sel':''}" data-filtre="tous"><b>${parEtat.tous.length}</b><span>groupes prévus</span></div>
+        <div class="bloc clic ${AT_FILTRE==='renseigne'?'sel':''}" data-filtre="renseigne" style="color:var(--vert)"><b>${parEtat.renseigne.length}</b><span>fiches renseignées</span></div>
+        <div class="bloc clic ${AT_FILTRE==='nonrens'?'sel':''}" data-filtre="nonrens" style="color:#C97A1F"><b>${parEtat.nonrens.length}</b><span>fiches non renseignées</span></div>
+        <div class="bloc clic ${AT_FILTRE==='attente'?'sel':''}" data-filtre="attente"><b>${parEtat.attente.length}</b><span>en attente</span></div>
+      </div>`;
+    if(AT_FILTRE){
+      const liste=[...parEtat[AT_FILTRE]].sort((a,b)=>(D.nomAff[a.fi]||(D.F||[])[a.fi]||'').localeCompare(D.nomAff[b.fi]||(D.F||[])[b.fi]||''));
+      html+=`<div class="blocCreneau"><h4>${CRENEAUX[AT_CRENEAU]}</h4>`;
+      if(!liste.length){ html+='<p class="note">Aucun groupe dans cette catégorie.</p></div>'; }
+      else {
+        html+=`<table class="pointage"><tr><th>Formateur</th><th>Groupe</th><th>Salle</th><th>État</th><th>Heure</th></tr>`;
+        liste.forEach(l=>{
+          const marque=AT_marqueDe(AT_POINTAGE,l);
+          const nom=D.nomAff[l.fi]||(D.F||[])[l.fi]||'—';
+          const groupe=(D.G[l.gi]||[])[0]||'—';
+          const salle=D.S[l.salleI] ? 'Salle '+String(D.S[l.salleI]).replace(/^S0?/,'') : '—';
+          const etatTxt = !marque ? '<span class="etatT attente">en attente</span>'
+            : marque.etat==='present' ? '<span class="etatT present">✓ présent</span>'
+            : marque.etat==='absent' ? '<span class="etatT absent">✗ absence collective</span>'
+            : '<span class="etatT nonrens">✎ fiche non renseignée</span>';
+          const heure = marque ? new Date(marque.heure).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Casablanca'}) : '—';
+          html+=`<tr><td>${nom}</td><td>${groupe}</td><td>${salle}</td><td>${etatTxt}</td><td>${heure}</td></tr>`;
+        });
+        html+='</table></div>';
+      }
+    }
+    box.innerHTML=html;
+    box.querySelectorAll('.bloc.clic').forEach(b=>{
+      b.onclick=()=>{
+        const f=b.dataset.filtre;
+        AT_FILTRE = (AT_FILTRE===f) ? null : f;
+        AT_rendreDetail();
+      };
+    });
+  }
+  /* Synthèse de la semaine entière, par formateur — colonnes renommées
+     « Fiche renseignée » / « Fiche non renseignée » plutôt que Présent/
+     Absent, pour la même raison que ci-dessus. */
+  function AT_syntheseSemaineHtml(sessions, pointage){
+    const parF={};
+    AT_lignesParGroupe(sessions).forEach(l=>{
+      const o=parF[l.fi]||(parF[l.fi]={prevu:0, renseigne:0, nonrens:0});
+      o.prevu++;
+      const m=AT_marqueDe(pointage,l);
+      if(m && (m.etat==='present'||m.etat==='absent')) o.renseigne++;
+      else if(m && m.etat==='nonrens') o.nonrens++;
+    });
+    const lignes=Object.keys(parF).map(Number).sort((a,b)=>(D.nomAff[a]||(D.F||[])[a]||'').localeCompare(D.nomAff[b]||(D.F||[])[b]||''));
+    if(!lignes.length) return '<p class="note">Aucun cours en salle cette semaine.</p>';
+    let html=`<table class="pointage"><tr><th>Formateur</th><th>Groupes prévus</th><th>Fiche renseignée</th><th>Fiche non renseignée</th><th>En attente</th><th>Taux</th></tr>`;
+    lignes.forEach(fi=>{
+      const o=parF[fi];
+      const attente=o.prevu-o.renseigne-o.nonrens;
+      const taux=o.prevu? Math.round(100*o.renseigne/o.prevu)+' %' : '—';
+      html+=`<tr><td>${D.nomAff[fi]||(D.F||[])[fi]||'—'}</td><td>${o.prevu}</td><td>${o.renseigne}</td><td>${o.nonrens}</td><td>${attente}</td><td>${taux}</td></tr>`;
+    });
+    html+='</table>';
+    return html;
+  }
+
   /* --- gestionnaire de stagiaires : il ne depose que les absences --------
      La direction garde l espace complet ; le gestionnaire n y voit que le
      fichier des absences, qui est sa seule responsabilite. */
@@ -3304,6 +3466,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
     document.querySelectorAll('#ongletsAdmin button').forEach(b=>b.classList.toggle('on', b.dataset.sadm===n));
     if(n==='dem') demandesRecues();
     if(n==='efm') efmRecus();
+    if(n==='abs') AT_demarrer();
   }
   document.querySelectorAll('#ongletsAdmin button').forEach(b=>b.onclick=()=>sousAdmin(b.dataset.sadm));
   $('btnEfmRecus').onclick=efmRecus;
