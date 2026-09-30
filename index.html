@@ -26,6 +26,10 @@ body{margin:0; background:var(--papier); color:var(--encre);
    sans dépendre d'une détection : le bandeau se replie, le logo est borné, et
    le titre garde une largeur minimale pour ne pas se casser mot par mot. */
 .enveloppe{max-width:1080px; margin:0 auto; padding:22px 20px 60px; overflow-x:hidden;}
+/* L'espace administrateur a des tableaux larges (pointage, synthèse semaine) —
+   cadre élargi rien que pour lui (30/09/2026), le reste de la plateforme garde
+   sa largeur de lecture habituelle. */
+.enveloppe.enveloppeLarge, .enveloppe:has(> #vueAdmin:not([hidden])){max-width:1440px;}
 header.tete{display:flex; align-items:center; gap:14px; padding-bottom:18px;
   border-bottom:1px solid var(--ligne); flex-wrap:wrap;}
 header.tete img{height:auto; max-height:42px; max-width:min(55%,220px); width:auto;}
@@ -602,34 +606,44 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
         <p class="note" style="margin-top:14px">Ce qui n'est pas redéposé est conservé tel qu'il est publié : vous pouvez publier les emplois seuls, les listes seules…</p>
       </div>
 
+      <!-- Refait le 30/09/2026, sur le modèle des rubriques du générateur
+           (Emploi Formateurs · Emploi Stagiaires · Occupation des Salles…) :
+           des sous-onglets, un seul volet affiché à la fois, en pleine
+           largeur — pas deux volets empilés ou côte à côte. -->
       <div class="sous-admin" data-page="abs" hidden>
-        <div class="cartes">
-          <fieldset>
-            <legend>Absences des stagiaires</legend>
+        <div class="onglets noprint" id="ongletsAbsAdmin">
+          <button data-uu="etat" class="on">État des absences</button>
+          <button data-uu="tournee">Suivi d'absence</button>
+        </div>
+
+        <div id="absAdminEtat">
+          <details style="margin:14px 0 10px">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--encre-doux)">Absence — déposer le classeur des stagiaires</summary>
             <p class="note">Classeur <b>ABSENCES</b> tenu par les gestionnaires&nbsp;: groupe, nom, prénom, une colonne d'heures par semaine (S1, S2…), sanction, observation, message de la direction.</p>
             <input type="file" id="fAbs" accept=".xlsx,.xlsm,.csv">
             <div class="etat" id="etatAbs"></div>
-          </fieldset>
-          <fieldset data-gest>
-            <legend>État des absences</legend>
-            <p class="note">Groupes classés par taux d'absence, détail par stagiaire, stagiaires éliminés au-delà de 50 h — la vue des gestionnaires.</p>
-            <div class="rangee" style="margin-top:4px">
-              <button class="action" id="btnEtatAbs">Ouvrir l'état des absences</button>
-            </div>
-          </fieldset>
+          </details>
+          <div class="rangee noprint" style="margin:4px 0 10px">
+            <label for="atEtatAn" style="font-size:12px;font-weight:600">Année</label>
+            <select id="atEtatAn" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
+              <option value="__ALL__">Toutes</option><option value="1">1ʳᵉ année</option>
+              <option value="2">2ᵉ année</option><option value="3">3ᵉ année</option>
+            </select>
+          </div>
+          <div id="atEtatZone"></div>
         </div>
+
         <!-- Suivi d'absence — tournée, en direct (30/09/2026) : on ne
              raisonne plus sur présent/absent stagiaire mais sur la FICHE
              du gestionnaire — renseignée (présence relevée, quelle qu'elle
              soit) ou non renseignée (orange, il n'a pas pu relever). -->
-        <fieldset style="margin-top:14px">
-          <legend>Suivi d'absence — tournée en direct</legend>
-          <p class="note">Ce que les gestionnaires ont relevé salle par salle, semaine par semaine.</p>
+        <div id="absAdminTournee" hidden>
+          <p class="note" style="margin-top:14px">Ce que les gestionnaires ont relevé salle par salle, semaine par semaine.</p>
           <div id="atSemaines" class="mesgroupes"></div>
           <div id="atJours" class="mesgroupes" style="margin-top:2px"></div>
           <div id="atCreneaux" class="mesgroupes" style="margin-top:2px"></div>
           <div id="atDetail" style="margin-top:4px"></div>
-        </fieldset>
+        </div>
       </div>
 
       <div class="sous-admin" data-page="dem" hidden>
@@ -730,7 +744,10 @@ async function mdpValide(mdp, stocke){            // compare avec ce que le navi
 }
 const norm=s=>(s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'')
                 .toUpperCase().replace(/[^A-Z0-9]/g,'');
-const vue=n=>['Accueil','Form','Stag','Gest','Emploi','Admin','Etat'].forEach(v=>$('vue'+v).hidden=(v!==n));
+const vue=n=>{
+  ['Accueil','Form','Stag','Gest','Emploi','Admin','Etat'].forEach(v=>$('vue'+v).hidden=(v!==n));
+  document.querySelector('.enveloppe').classList.toggle('enveloppeLarge', n==='Admin');
+};
 
 /* ------------------------- données ------------------------- */
 /* VERSION FIREBASE — le stockage partagé est une base Firestore (Google), et
@@ -3291,7 +3308,57 @@ $('btnDeconnexionAdm').onclick=async()=>{
     AT_JOUR = info ? info.jour : 0;
     AT_CRENEAU=null; AT_FILTRE=null;
     AT_renderNav();
+    const selAn=$('atEtatAn'); if(selAn) selAn.onchange=AT_etatGroupes;
+    AT_etatGroupes();
     await AT_charger();
+  }
+  /* « État des absences » affiché directement dans ce volet, sans bouton ni
+     navigation — même calcul que la page des gestionnaires (classement par
+     taux d'absence), en plus compact : pas de sous-onglet Stagiaires ici. */
+  function AT_etatGroupes(){
+    const box=$('atEtatZone');
+    const abs=(D && D.abs) || [];
+    if(!abs.length){ box.innerHTML='<div class="vide-msg">Aucune absence publiée. Déposez le classeur ci-dessus, puis publiez.</div>'; return; }
+    const nbSem=semAbs().length||0;
+    const anF=($('atEtatAn')||{}).value || '__ALL__';
+    const par=new Map();
+    abs.forEach(l=>{
+      const grp=l[0], an=anneeDeGroupe(grp);
+      if(anF!=='__ALL__' && String(an)!==anF) return;
+      const cle=an+'|'+grp;
+      let e=par.get(cle);
+      if(!e){ e={an, grp, n:0, h:0, conseil:0, max:0, elimines:[]}; par.set(cle,e); }
+      const t=totalAbs(l);
+      e.n++; e.h+=t;
+      if(t>e.max) e.max=t;
+      if(t>SEUIL_CONSEIL){ e.conseil++; e.elimines.push({nom:(l[1]||'')+' '+(l[2]||''), h:t}); }
+    });
+    const lignes=[...par.values()].sort((a,b)=>
+      (b.h/Math.max(1,b.n))-(a.h/Math.max(1,a.n)) || b.h-a.h || a.grp.localeCompare(b.grp));
+    const fmt=x=>x.toFixed(1).replace('.',',');
+    if(!lignes.length){ box.innerHTML='<div class="vide-msg">Aucun groupe pour cette année.</div>'; return; }
+    box.innerHTML=`<div class="cadre-abs"><table class="abs">
+        <tr><th>Rang</th><th class="qui">Groupe</th><th>Stagiaires</th><th>Total</th>
+            <th>Taux (h / stagiaire)</th><th>Maximum</th><th>À plus de ${SEUIL_CONSEIL} h</th></tr>
+        ${lignes.map((e,i)=>`<tr${e.conseil?' class="rouge"':''}>
+          <td>${i+1}</td>
+          <td class="qui">${e.grp}<small>${e.an==='?'?'année inconnue':e.an+'ʳᵉ année'}</small></td>
+          <td>${e.n}</td>
+          <td class="tot">${fmt(e.h)} h</td>
+          <td><b>${fmt(e.h/Math.max(1,e.n))} h</b></td>
+          <td>${fmt(e.max)} h</td>
+          <td>${e.conseil
+                ? `<button class="pastille conseil" style="border:0;cursor:pointer;font:inherit" data-elim="${i}">${e.conseil} ▾</button>
+                   <div class="det" data-noms="${i}" hidden style="margin-top:6px;text-align:left">
+                     ${e.elimines.sort((a,b)=>b.h-a.h).map(s=>`<div>${s.nom} — <b>${fmt(s.h)} h</b></div>`).join('')}
+                   </div>`
+                : '0'}</td>
+        </tr>`).join('')}
+      </table></div>
+      <p class="note">Classés du plus fort taux d'absence au plus faible, sur ${nbSem||'?'} semaine${nbSem>1?'s':''}. Au-delà de ${SEUIL_CONSEIL} h : élimination.</p>`;
+    box.querySelectorAll('[data-elim]').forEach(b=>{
+      b.onclick=()=>{ const d=box.querySelector('[data-noms="'+b.dataset.elim+'"]'); if(d) d.hidden=!d.hidden; };
+    });
   }
   function AT_renderNav(){
     const nSem=Math.max(1, (D.lundis||[]).length, (D.semaines||[]).length);
@@ -3457,7 +3524,6 @@ $('btnDeconnexionAdm').onclick=async()=>{
   }
   document.querySelectorAll('#vueEtat .onglets button')
     .forEach(b=>b.onclick=()=>sousPage(b.dataset.sous));
-  $('btnEtatAbs').onclick=()=>{ vue('Etat'); sousPage('tournee'); window.scrollTo({top:0}); };
   $('btnImpEtat').onclick=()=>window.print();
   $('btnDemRecues').onclick=demandesRecues;
   /* sous-pages de l'espace administrateur */
@@ -3469,6 +3535,14 @@ $('btnDeconnexionAdm').onclick=async()=>{
     if(n==='abs') AT_demarrer();
   }
   document.querySelectorAll('#ongletsAdmin button').forEach(b=>b.onclick=()=>sousAdmin(b.dataset.sadm));
+  /* Sous-onglets du volet Absences — un seul affiché à la fois, en pleine
+     largeur (même principe que les rubriques Emploi du générateur). */
+  function absAdminVue(n){
+    $('absAdminEtat').hidden = n!=='etat';
+    $('absAdminTournee').hidden = n!=='tournee';
+    document.querySelectorAll('#ongletsAbsAdmin button').forEach(b=>b.classList.toggle('on', b.dataset.uu===n));
+  }
+  document.querySelectorAll('#ongletsAbsAdmin button').forEach(b=>b.onclick=()=>absAdminVue(b.dataset.uu));
   $('btnEfmRecus').onclick=efmRecus;
   $('okGest').onclick=async()=>{
     const mat=($('gMat').value||'').trim(), m=($('gMdp').value||'').trim();
