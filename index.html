@@ -627,14 +627,38 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
             <input type="file" id="fAbs" accept=".xlsx,.xlsm,.csv">
             <div class="etat" id="etatAbs"></div>
           </details>
-          <div class="rangee noprint" style="margin:4px 0 10px">
-            <label for="atEtatAn" style="font-size:12px;font-weight:600">Année</label>
-            <select id="atEtatAn" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
-              <option value="__ALL__">Toutes</option><option value="1">1ʳᵉ année</option>
-              <option value="2">2ᵉ année</option><option value="3">3ᵉ année</option>
-            </select>
+          <!-- Mêmes trois sous-onglets que côté gestionnaires. -->
+          <div class="onglets noprint" id="ongletsEtatAdmin">
+            <button data-eu="groupes" class="on">Groupes</button>
+            <button data-eu="jour">Par jour et créneau</button>
+            <button data-eu="stag">Stagiaires</button>
           </div>
-          <div id="atEtatZone"></div>
+          <div id="etatAdminGroupes">
+            <div class="rangee noprint" style="margin:14px 0 10px">
+              <label for="atEtatAn" style="font-size:12px;font-weight:600">Année</label>
+              <select id="atEtatAn" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
+                <option value="__ALL__">Toutes</option><option value="1">1ʳᵉ année</option>
+                <option value="2">2ᵉ année</option><option value="3">3ᵉ année</option>
+              </select>
+            </div>
+            <div id="atEtatZone"></div>
+          </div>
+          <div id="etatAdminJour" hidden>
+            <div id="atZoneJourAbs"></div>
+          </div>
+          <div id="etatAdminStag" hidden>
+            <div class="rangee noprint" id="atFiltresStag" style="margin-top:14px">
+              <label for="atEtatAn2" style="font-size:12px;font-weight:600">Année</label>
+              <select id="atEtatAn2" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
+                <option value="__ALL__">Toutes</option><option value="1">1ʳᵉ année</option>
+                <option value="2">2ᵉ année</option><option value="3">3ᵉ année</option>
+              </select>
+              <label for="atEtatGrp" style="font-size:12px;font-weight:600">Groupe</label>
+              <select id="atEtatGrp" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)"></select>
+              <input type="search" id="atEtatQ" placeholder="Chercher un stagiaire…" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre);min-width:200px">
+            </div>
+            <div id="atZoneDetailAbs"></div>
+          </div>
         </div>
 
         <!-- Suivi d'absence — tournée, en direct (30/09/2026) : on ne
@@ -3313,7 +3337,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
     AT_CRENEAU=null; AT_FILTRE=null;
     AT_renderNav();
     const selAn=$('atEtatAn'); if(selAn) selAn.onchange=AT_etatGroupes;
-    AT_etatGroupes();
+    absEtatSousVue('groupes');
     await AT_charger();
   }
   /* « État des absences » affiché directement dans ce volet, sans bouton ni
@@ -3362,6 +3386,118 @@ $('btnDeconnexionAdm').onclick=async()=>{
       <p class="note">Classés du plus fort taux d'absence au plus faible, sur ${nbSem||'?'} semaine${nbSem>1?'s':''}. Au-delà de ${SEUIL_CONSEIL} h : élimination.</p>`;
     box.querySelectorAll('[data-elim]').forEach(b=>{
       b.onclick=()=>{ const d=box.querySelector('[data-noms="'+b.dataset.elim+'"]'); if(d) d.hidden=!d.hidden; };
+    });
+  }
+  /* Sous-onglets de « État des absences » (30/09/2026) : Groupes (ci-dessus)
+     · Par jour et créneau · Stagiaires — mêmes trois vues que la page des
+     gestionnaires, avec leur propre jeu d'identifiants pour ne jamais entrer
+     en conflit avec ceux de cette page (les deux existent en même temps
+     dans le document, une seule est affichée). */
+  function absEtatSousVue(n){
+    $('etatAdminGroupes').hidden = n!=='groupes';
+    $('etatAdminJour').hidden = n!=='jour';
+    $('etatAdminStag').hidden = n!=='stag';
+    document.querySelectorAll('#ongletsEtatAdmin button').forEach(b=>b.classList.toggle('on', b.dataset.eu===n));
+    if(n==='groupes') AT_etatGroupes();
+    if(n==='jour') AT_parJour();
+    if(n==='stag') AT_stagiaires();
+  }
+  document.querySelectorAll('#ongletsEtatAdmin button').forEach(b=>b.onclick=()=>absEtatSousVue(b.dataset.eu));
+  let AT_JOUR_NAV={sem:0}, AT_JOUR_GI=null, AT_JOUR_AN='__ALL__';
+  async function AT_parJour(){
+    const box=$('atZoneJourAbs'); if(!box) return;
+    const tousGs=[...D.G.keys()].sort((a,b)=>D.G[a][0].localeCompare(D.G[b][0]));
+    const gs=tousGs.filter(gi=>AT_JOUR_AN==='__ALL__' || String(anneeDeGroupe(D.G[gi][0]))===AT_JOUR_AN);
+    if(AT_JOUR_GI===null || !gs.includes(AT_JOUR_GI)) AT_JOUR_GI = gs.length? gs[0] : null;
+    const nbSem=(D.semaines||[]).length;
+    if(AT_JOUR_NAV.sem==null || !AT_JOUR_NAV.vu){ AT_JOUR_NAV.sem=semaineDuJourPub(); AT_JOUR_NAV.vu=true; }
+    const champStyle='font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)';
+    const opt=(v,l)=>`<option value="${v}" ${v===AT_JOUR_AN?'selected':''}>${l}</option>`;
+    const selAn='<select id="atJourAn" style="'+champStyle+';margin:14px 8px 0 0">'
+      +opt('__ALL__','Toutes les années')+opt('1','1ʳᵉ année')+opt('2','2ᵉ année')+opt('3','3ᵉ année')
+      +'</select>';
+    const selGrp='<select id="atJourGrp" style="'+champStyle+';margin:14px 0 0">'+
+      (gs.length ? gs.map(gi=>`<option value="${gi}" ${gi===AT_JOUR_GI?'selected':''}>${D.G[gi][0]} — ${D.G[gi][1]||''}</option>`).join('')
+                 : '<option value="">Aucun groupe pour cette année</option>')+
+      '</select>';
+    if(!tousGs.length){ box.innerHTML='<div class="vide-msg">Aucun groupe publié.</div>'; return; }
+    box.innerHTML=selAn+selGrp+navSemaineHtml(AT_JOUR_NAV, nbSem)+'<div class="zoneRes" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+    $('atJourAn').onchange=e=>{ AT_JOUR_AN=e.target.value; AT_JOUR_GI=null; AT_parJour(); };
+    if(AT_JOUR_GI===null){ box.querySelector('.zoneRes').innerHTML='<div class="vide-msg">Aucun groupe pour cette année.</div>'; return; }
+    $('atJourGrp').onchange=e=>{ AT_JOUR_GI=+e.target.value; AT_parJour(); };
+    brancherNavSemaine(box, AT_JOUR_NAV, AT_parJour);
+    const cle=box.querySelector('.zoneRes');
+    const {html, pointage}=await grilleAbsSemaine(AT_JOUR_GI, AT_JOUR_NAV.sem);
+    if(box!==$('atZoneJourAbs')) return;
+    cle.innerHTML=html;
+    brancherClicsGrilleAbs(cle, AT_JOUR_GI, AT_JOUR_NAV.sem, pointage);
+  }
+  let AT_STAG_DETAIL=null;
+  function AT_stagiaires(){
+    const box=$('atZoneDetailAbs'); if(!box) return;
+    const filtres=$('atFiltresStag');
+    if(AT_STAG_DETAIL){
+      if(filtres) filtres.hidden=true;
+      box.innerHTML='<p class="note">Chargement…</p>';
+      const {grp,nom,pre,w}=AT_STAG_DETAIL;
+      detailAbsStagiaireSemaineHtml(grp,nom,pre,w).then(html=>{
+        if(!AT_STAG_DETAIL) return;
+        box.innerHTML='<button class="action fantome" id="atBtnRetourStag" style="margin-bottom:12px">← Retour</button>'+html;
+        const b=$('atBtnRetourStag'); if(b) b.onclick=()=>{ AT_STAG_DETAIL=null; AT_stagiaires(); };
+      });
+      return;
+    }
+    if(filtres) filtres.hidden=false;
+    const abs=(D && D.abs) || [];
+    const sem=semAbs();
+    const grp=($('atEtatGrp')||{}).value || '__ALL__';
+    const anF=($('atEtatAn2')||{}).value || '__ALL__';
+    const q=(($('atEtatQ')||{}).value||'').trim().toUpperCase();
+    const gsel=$('atEtatGrp');
+    if(gsel){
+      const gs=[...new Set(abs.filter(l=>anF==='__ALL__' || String(anneeDeGroupe(l[0]))===anF).map(l=>l[0]))].sort();
+      const garder = gs.includes(gsel.value) ? gsel.value : '__ALL__';
+      const html='<option value="__ALL__">Tous les groupes</option>'
+        + gs.map(g=>`<option value="${g}" ${g===garder?'selected':''}>${g}</option>`).join('');
+      if(gsel.innerHTML!==html) gsel.innerHTML=html;
+      gsel.onchange=AT_stagiaires;
+    }
+    const an2=$('atEtatAn2'); if(an2) an2.onchange=AT_stagiaires;
+    const q2=$('atEtatQ'); if(q2) q2.oninput=AT_stagiaires;
+    const lignes=abs
+      .filter(l=>anF==='__ALL__' || String(anneeDeGroupe(l[0]))===anF)
+      .filter(l=>grp==='__ALL__' || l[0]===grp)
+      .filter(l=>!q || ((l[1]||'')+' '+(l[2]||'')).toUpperCase().includes(q))
+      .map(l=>({grp:l[0], nom:l[1], pre:l[2], h:l[3]||[], tot:totalAbs(l),
+                sanction:l[4]||'', obs:l[5]||'', dir:l[6]||''}))
+      .sort((a,b)=>b.tot-a.tot);
+    if(!lignes.length){ box.innerHTML='<div class="vide-msg">Aucun stagiaire ne correspond.</div>'; return; }
+    const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
+    box.innerHTML=`<div class="cadre-abs">
+      <table class="abs">
+        <tr><th>Rang</th><th class="qui">Stagiaire</th>
+          ${sem.map(s=>`<th class="sem">${s}</th>`).join('')}
+          <th>Total</th><th class="sanc">Sanction</th></tr>
+        ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
+          <td>${i+1}</td>
+          <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
+          ${x.h.map((v,w)=>{ const on=(+v||0)>0;
+            return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:''}>${fmt(v)}</td>`; }).join('')}
+          <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
+          <td class="sanc">${x.sanction || '—'}
+            ${x.obs?`<span class="det">${x.obs}</span>`:''}
+            ${x.dir?`<span class="dir">${x.dir}</span>`:''}
+            ${x.tot>SEUIL_CONSEIL?'<span class="pastille conseil">éliminé</span>':''}</td>
+        </tr>`).join('')}
+      </table></div>
+      <p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
+        Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).
+        Cliquez sur une case d'absence pour voir le détail de la semaine.</p>`;
+    box.querySelectorAll('.clicSem').forEach(td=>{
+      td.onclick=()=>{
+        AT_STAG_DETAIL={grp:td.dataset.grp, nom:td.dataset.nom, pre:td.dataset.pre, w:+td.dataset.w};
+        AT_stagiaires();
+      };
     });
   }
   function AT_renderNav(){
