@@ -454,14 +454,21 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
     </div>
     <!-- Deux sous-pages : le relevé d'un côté, l'injection du fichier de l'autre. -->
     <div class="onglets noprint">
-      <button data-sous="etat" class="on">Groupes</button>
+      <button data-sous="tournee" class="on">Suivi d'absence</button>
+      <button data-sous="etat">Groupes</button>
       <button data-sous="jour">Par jour et créneau</button>
       <button data-sous="stag">Stagiaires</button>
       <button data-sous="inj">Injection du fichier</button>
     </div>
+    <!-- Sous-page 0 : l'application Suivi d'absence (tournée agent + tableau
+         responsable) affichée telle quelle, dans son propre cadre. -->
+    <div id="sousTournee">
+      <iframe id="iframeTournee" title="Suivi d'absence" loading="lazy"
+        style="width:100%;height:80vh;border:1px solid var(--ligne);border-radius:12px;margin-top:14px"></iframe>
+    </div>
     <!-- Sous-page 1 : les groupes, du plus absent au moins absent, avec les
          stagiaires éliminés (plus de 50 h). Filtre par année. -->
-    <div id="sousEtat">
+    <div id="sousEtat" hidden>
       <div class="rangee noprint" style="margin-top:14px">
         <label for="etatAn" style="font-size:12px;font-weight:600">Année</label>
         <select id="etatAn" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre)">
@@ -2925,16 +2932,24 @@ $('btnDeconnexionAdm').onclick=async()=>{
      d'en recréer un : les identifiants et les gestionnaires de clic restent
      ceux du dépôt d'origine. */
   function sousPage(n){
+    $('sousTournee').hidden = n!=='tournee';
     $('sousEtat').hidden = n!=='etat';
     $('sousStag').hidden = n!=='stag';
     $('sousJour').hidden = n!=='jour';
     $('sousInj').hidden  = n!=='inj';
     document.querySelectorAll('#vueEtat .onglets button')
       .forEach(b=>b.classList.toggle('on', b.dataset.sous===n));
-    $('titreEtat').textContent = n==='etat' ? 'État des absences par groupe'
+    $('titreEtat').textContent = n==='tournee' ? 'Suivi d’absence'
+                               : n==='etat' ? 'État des absences par groupe'
                                : n==='stag' ? 'État des absences par stagiaire'
                                : n==='jour' ? 'État des absences par jour et créneau'
                                : 'Injection de l’état des absences';
+    if(n==='tournee'){
+      /* chargée seulement à l'ouverture de l'onglet, pas à chaque fois */
+      const f=$('iframeTournee');
+      if(!f.src) f.src='suivi-absence.html';
+      return;
+    }
     if(n==='jour'){ afficherAbsJourAdmin(); return; }
     if(n==='inj'){
       const bloc=$('fAbs') && $('fAbs').closest('fieldset');
@@ -2958,7 +2973,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
   }
   document.querySelectorAll('#vueEtat .onglets button')
     .forEach(b=>b.onclick=()=>sousPage(b.dataset.sous));
-  $('btnEtatAbs').onclick=()=>{ vue('Etat'); sousPage('etat'); window.scrollTo({top:0}); };
+  $('btnEtatAbs').onclick=()=>{ vue('Etat'); sousPage('tournee'); window.scrollTo({top:0}); };
   $('btnImpEtat').onclick=()=>window.print();
   $('btnDemRecues').onclick=demandesRecues;
   /* sous-pages de l'espace administrateur */
