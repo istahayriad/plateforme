@@ -3306,7 +3306,27 @@ $('btnDeconnexionAdm').onclick=async()=>{
         T_rendreSalleDetail();
       };
     });
-    $('btnAnnulerSalle').onclick=()=>{ T_ATTENTE={}; T_SALLE=null; T_afficherSalles(); };
+    $('btnAnnulerSalle').onclick=async()=>{
+      try{
+        const dp=await db.doc('pointage/s'+T_SW).get();
+        const p=dp.data || {};
+        if(p[cle]){
+          let touche=false;
+          for(const {gi} of lignes){
+            const sauve=p[cle][gi];
+            if(sauve){
+              const nomGroupe=(D.G[gi]||[])[0]||'groupe '+gi;
+              const avant=Array.isArray(sauve.absents) ? sauve.absents : [];
+              try{ await T_retirerAbsences(nomGroupe, avant); }catch(e){}
+              delete p[cle][gi];
+              touche=true;
+            }
+          }
+          if(touche) await db.doc('pointage/s'+T_SW).set(p);
+        }
+      }catch(e){ alert('Annulation impossible : vérifiez la connexion internet.'); }
+      T_ATTENTE={}; T_SALLE=null; T_afficherSalles();
+    };
     $('btnValiderSalle').onclick=async()=>{
       if(!Object.keys(T_ATTENTE).length){ T_SALLE=null; T_afficherSalles(); return; }
       try{
