@@ -237,7 +237,8 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
   padding:2px 8px; border-radius:6px; background:var(--vert-doux); color:var(--vert); white-space:nowrap;}
 .pastille.bientot{background:var(--alerte-doux); color:var(--alerte);}
 .pastille.fait{background:transparent; color:var(--encre-doux); border:1px solid var(--ligne);}
-.cadre-abs{overflow-x:auto; margin-top:14px; padding-bottom:4px;}
+.cadre-abs{overflow-x:auto; margin-top:14px; padding-bottom:4px; cursor:grab;}
+.cadre-abs.glisserActif{cursor:grabbing; user-select:none;}
 .abs{width:100%; border-collapse:collapse; font-size:13px;}
 .abs th{text-align:center; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.05em;
   text-transform:uppercase; color:var(--encre-doux); font-weight:500; padding:0 6px 8px; border-bottom:1px solid var(--ligne);}
@@ -246,8 +247,9 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
   font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums;}
 .abs td.qui{font-family:'IBM Plex Sans',sans-serif; font-weight:500;}
 .abs td.qui small{display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--encre-doux);}
-.abs td.sem{color:var(--encre-doux); font-size:12px; width:34px;}
+.abs td.sem{color:var(--encre-doux); font-size:12px; width:30px;}
 .abs td.sem.plein{color:var(--encre); font-weight:600;}
+.abs th.sousent{font-size:8.5px; padding-bottom:5px; border-bottom:1px solid var(--ligne);}
 .abs td.tot{font-weight:600;}
 .abs th.sanc, .abs td.sanc{text-align:left; min-width:150px; font-family:'IBM Plex Sans',sans-serif;}
 .abs tr.rouge td.tot{color:var(--alerte);}
@@ -997,6 +999,40 @@ function lignesAbs(groupe){
   return (D.abs||[]).filter(l=>norm(l[0])===norm(groupe));
 }
 function totalAbs(l){ return (l[3]||[]).reduce((a,b)=>a+(+b||0),0); }
+function totalJustifie(l){ return (l[7]||[]).reduce((a,b)=>a+(+b||0),0); }
+/* Tableau « Stagiaires » de l'État des absences (gestionnaire ET direction,
+   demande du 01/10/2026) : chaque semaine porte désormais DEUX colonnes —
+   ANJ (absence non justifiée, sanctionnable, l[3]) et ABJ (absence
+   justifiée, l[7]) — au lieu d'une seule valeur fondue. Les totaux de fin de
+   tableau restent la lecture rapide (Total = somme ANJ, Absence justifiée =
+   somme ABJ). Partagé entre detailAbsences (éditable) et AT_stagiaires
+   (lecture seule) pour ne pas dupliquer la mise en page. */
+function tableauStagiairesAbsHtml(lignes, sem){
+  const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
+  return `<div class="cadre-abs">
+    <table class="abs">
+      <tr><th rowspan="2">Rang</th><th class="qui" rowspan="2">Stagiaire</th>
+        ${sem.map(s=>`<th class="sem" colspan="2">${s}</th>`).join('')}
+        <th rowspan="2">Total</th><th rowspan="2">Absence justifiée</th><th class="sanc" rowspan="2">Sanction</th></tr>
+      <tr>${sem.map(()=>`<th class="sem sousent">ANJ</th><th class="sem sousent">ABJ</th>`).join('')}</tr>
+      ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
+        <td>${i+1}</td>
+        <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
+        ${x.h.map((v,w)=>{
+          const vj=(x.hj&&x.hj[w])||0;
+          const on=(+v||0)>0 || (+vj||0)>0;
+          const attrs=on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:'';
+          return `<td class="sem${on?' plein clicSem':''}"${attrs}>${fmt(v)}</td><td class="sem${on?' plein clicSem':''}"${attrs}>${fmt(vj)}</td>`;
+        }).join('')}
+        <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
+        <td class="tot">${x.totJust.toFixed(1).replace('.',',')} h</td>
+        <td class="sanc">${x.sanction || '—'}
+          ${x.obs?`<span class="det">${x.obs}</span>`:''}
+          ${x.dir?`<span class="dir">${x.dir}</span>`:''}
+          ${x.tot>SEUIL_CONSEIL?'<span class="pastille conseil">éliminé</span>':''}</td>
+      </tr>`).join('')}
+    </table></div>`;
+}
 function pastilleTaux(t){
   if(t===null) return '<span class="pastille fait">—</span>';
   const c = t>=10 ? ' haut' : t>=5 ? ' moyen' : '';
@@ -1452,8 +1488,43 @@ async function retirerEfm(mat, rang){
 /* la mention « faites glisser » n'apparaît que si le tableau déborde vraiment */
 function majGlisser(zone){
   const el=zone.querySelector('.glisser'), cadre=zone.querySelector('.cadre-abs');
+  if(cadre) brancherGlisserHorizontal(cadre);
   if(!el || !cadre) return;
   el.classList.toggle('montrer', cadre.scrollWidth > cadre.clientWidth + 2);
+}
+/* Défilement horizontal à la souris (demande du 01/10/2026) : un tableau large
+   (semaines S1…S42) se faisait défiler uniquement par la barre tout en bas,
+   qu'il fallait aller chercher en descendant toute la liste. On peut
+   désormais cliquer n'importe où dans le cadre et glisser horizontalement,
+   comme sur téléphone. Un glissé réel (plus de 4 px) annule le clic qui
+   suit, pour ne pas ouvrir le détail d'une semaine par erreur en glissant
+   au-dessus d'une case cliquable. */
+function brancherGlisserHorizontal(el){
+  if(!el || el.dataset.glisserOk) return;
+  el.dataset.glisserOk='1';
+  let bas=false, depart=0, scrollDepart=0, bouge=false;
+  const fin=()=>{
+    if(!bas) return;
+    bas=false; el.classList.remove('glisserActif');
+    if(bouge){
+      const bloque=ev=>{ ev.stopPropagation(); ev.preventDefault(); };
+      el.addEventListener('click', bloque, {capture:true, once:true});
+    }
+  };
+  el.addEventListener('mousedown', e=>{
+    if(e.button!==0) return;
+    bas=true; bouge=false; depart=e.pageX; scrollDepart=el.scrollLeft;
+    el.classList.add('glisserActif');
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!bas) return;
+    const dx=e.pageX-depart;
+    if(Math.abs(dx)>4) bouge=true;
+    if(bouge) e.preventDefault();
+    el.scrollLeft=scrollDepart-dx;
+  });
+  window.addEventListener('mouseup', fin);
+  window.addEventListener('mouseleave', fin);
 }
 async function afficherEfm(){
   $('cadreGrille').hidden=true; $('listeJours').hidden=true; $('barreSem').hidden=true;
@@ -2167,10 +2238,22 @@ function detailAbsences(){
     if(filtres) filtres.hidden=true;
     box.innerHTML='<p class="note">Chargement…</p>';
     const {grp,nom,pre,w}=ABS_STAG_DETAIL;
-    detailAbsStagiaireSemaineHtml(grp,nom,pre,w).then(html=>{
+    detailAbsStagiaireSemaineHtml(grp,nom,pre,w,true).then(html=>{
       if(!ABS_STAG_DETAIL) return;                    // retour cliqué entre-temps
       box.innerHTML='<button class="action fantome" id="btnRetourAbsStag" style="margin-bottom:12px">← Retour</button>'+html;
       const b=$('btnRetourAbsStag'); if(b) b.onclick=()=>{ ABS_STAG_DETAIL=null; detailAbsences(); };
+      /* Absence justifiée : espace Gestionnaires de stagiaires SEULEMENT
+         (demande du 01/10/2026) — l'espace direction (AT_stagiaires) affiche
+         la même case mais désactivée, lecture seule. */
+      box.querySelectorAll('.chkJustifie').forEach(chk=>{
+        chk.onchange=async()=>{
+          const avant=!chk.checked;
+          chk.disabled=true;
+          const ok=await justifierAbsenceSeance(chk.dataset.grp, chk.dataset.nom, chk.dataset.pre, +chk.dataset.sem, chk.dataset.cle, +chk.dataset.gi, chk.checked);
+          if(!ok){ alert('Enregistrement impossible : vérifiez la connexion internet.'); chk.checked=avant; }
+          chk.disabled=false;
+        };
+      });
     });
     return;
   }
@@ -2184,37 +2267,23 @@ function detailAbsences(){
     .filter(l=>anF==='__ALL__' || String(anneeDeGroupe(l[0]))===anF)
     .filter(l=>grp==='__ALL__' || l[0]===grp)
     .filter(l=>!q || ((l[1]||'')+' '+(l[2]||'')).toUpperCase().includes(q))
-    .map(l=>({grp:l[0], nom:l[1], pre:l[2], h:l[3]||[], tot:totalAbs(l),
+    .map(l=>({grp:l[0], nom:l[1], pre:l[2], h:l[3]||[], hj:l[7]||[], tot:totalAbs(l), totJust:totalJustifie(l),
               sanction:l[4]||'', obs:l[5]||'', dir:l[6]||''}))
     .sort((a,b)=>b.tot-a.tot);
   if(!lignes.length){
     box.innerHTML='<div class="vide-msg">Aucun stagiaire ne correspond.</div>';
     return;
   }
-  const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
   /* Chaque case d'absence cumulée > 0 est cliquable (demande du 23/09/2026) :
      elle affiche en dessous le détail de CETTE semaine pour CE stagiaire —
      jour, créneau, module, formateur — via detailAbsStagiaireSemaineHtml. */
-  box.innerHTML=`<div class="cadre-abs">
-    <table class="abs">
-      <tr><th>Rang</th><th class="qui">Stagiaire</th>
-        ${sem.map(s=>`<th class="sem">${s}</th>`).join('')}
-        <th>Total</th><th class="sanc">Sanction</th></tr>
-      ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
-        <td>${i+1}</td>
-        <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
-        ${x.h.map((v,w)=>{ const on=(+v||0)>0;
-          return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:''}>${fmt(v)}</td>`; }).join('')}
-        <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
-        <td class="sanc">${x.sanction || '—'}
-          ${x.obs?`<span class="det">${x.obs}</span>`:''}
-          ${x.dir?`<span class="dir">${x.dir}</span>`:''}
-          ${x.tot>SEUIL_CONSEIL?'<span class="pastille conseil">éliminé</span>':''}</td>
-      </tr>`).join('')}
-    </table></div>
-    <p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
-      Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).
-      Cliquez sur une case d'absence pour voir le détail de la semaine.</p>`;
+  box.innerHTML=tableauStagiairesAbsHtml(lignes, sem)+
+    `<p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
+      Au-delà de ${SEUIL_CONSEIL} h d'absence NON justifiée (colonne ANJ), le stagiaire est éliminé (ligne rouge).
+      Cliquez sur une case d'absence pour voir le détail de la semaine et cocher les créneaux justifiés
+      (ils passent aussitôt d'ANJ à ABJ).
+      Faites glisser le tableau horizontalement pour voir toutes les semaines.</p>`;
+  brancherGlisserHorizontal(box.querySelector('.cadre-abs'));
   box.querySelectorAll('.clicSem').forEach(td=>{
     td.onclick=()=>{
       ABS_STAG_DETAIL={grp:td.dataset.grp, nom:td.dataset.nom, pre:td.dataset.pre, w:+td.dataset.w};
@@ -2226,7 +2295,7 @@ function detailAbsences(){
    jour, créneau, module et formateur de chaque séance où il a été relevé
    absent — relu dans pointage/s<sem>, la même source que la grille « Par
    jour et créneau ». */
-async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
+async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem, editable){
   const iG=D.G.findIndex(g=>g[0]===nomGroupe);
   const libSem=(semAbs()[sem]) || ('S'+(sem+1));
   if(iG<0) return '<div class="vide-msg">Groupe introuvable.</div>';
@@ -2236,12 +2305,13 @@ async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
   const pointage=(doc && doc.exists && doc.data) || {};
   const lignes=[];
   ses.forEach(s=>{
-    const entree=(pointage[s[1]+'_'+s[2]]||{})[iG];
+    const cle=s[1]+'_'+s[2];
+    const entree=(pointage[cle]||{})[iG];
     if(!entree || !Array.isArray(entree.absents)) return;
-    const trouve=entree.absents.some(([n,p])=>norm(n)===norm(nom) && norm(p)===norm(prenom));
-    if(!trouve) return;
+    const paire=entree.absents.find(([n,p])=>norm(n)===norm(nom) && norm(p)===norm(prenom));
+    if(!paire) return;
     const d=dateDeSeance(sem, s[1]);
-    lignes.push({jour:(JOURS[s[1]]||'')+(d?' '+d:''), creneau:CRENEAUX[s[2]]||'', module:D.M[s[5]]||'', formateur:D.nomAff[s[0]]||''});
+    lignes.push({jour:(JOURS[s[1]]||'')+(d?' '+d:''), creneau:CRENEAUX[s[2]]||'', module:D.M[s[5]]||'', formateur:D.nomAff[s[0]]||'', cle, justifie:!!paire[2]});
   });
   if(!lignes.length){
     return `<div class="carteAbsJour"><div class="entete"><span class="grp">${nom} ${prenom} — ${libSem}</span></div>
@@ -2250,10 +2320,58 @@ async function detailAbsStagiaireSemaineHtml(nomGroupe, nom, prenom, sem){
   return `<div class="carteAbsJour">
     <div class="entete"><span class="grp">${nom} ${prenom} — ${nomGroupe} — ${libSem}</span></div>
     <div class="cadre-abs" style="margin-top:8px"><table class="abs">
-      <tr><th>Jour</th><th>Créneau</th><th class="qui">Module</th><th class="qui">Formateur</th></tr>
-      ${lignes.map(l=>`<tr><td>${l.jour}</td><td>${l.creneau}</td><td class="qui">${l.module}</td><td class="qui">${l.formateur}</td></tr>`).join('')}
+      <tr><th>Jour</th><th>Créneau</th><th class="qui">Module</th><th class="qui">Formateur</th><th>Absence justifiée</th></tr>
+      ${lignes.map(l=>`<tr>
+          <td>${l.jour}</td><td>${l.creneau}</td><td class="qui">${l.module}</td><td class="qui">${l.formateur}</td>
+          <td style="text-align:center"><input type="checkbox" class="chkJustifie" ${l.justifie?'checked':''} ${editable?'':'disabled'}
+            data-grp="${nomGroupe}" data-nom="${nom}" data-pre="${prenom}" data-sem="${sem}" data-cle="${l.cle}" data-gi="${iG}"></td>
+        </tr>`).join('')}
     </table></div>
+    ${editable?'<p class="note">Cochez « Absence justifiée » pour un créneau : ces heures sortent du Total (sanctionnable) et passent dans Absence justifiée.</p>':''}
   </div>`;
+}
+/* Déplace 2,5 h entre « absence » (sanctionnable) et « absence justifiée » pour
+   UNE séance précise d'un stagiaire (demande du 01/10/2026) : la coche est
+   mémorisée sur l'entrée pointage elle-même (3ᵉ élément de la paire
+   [nom, prénom, justifie] — rétrocompatible, les entrées anciennes sans ce
+   3ᵉ élément valent « non justifiée »), et le report dans abs/<groupe>
+   (colonne 7, nouvelle, parallèle à la colonne 3 des heures) répercute
+   immédiatement sur le Total affiché. */
+async function justifierAbsenceSeance(nomGroupe, nom, prenom, sem, cle, iG, justifie){
+  try{
+    const dp=await db.doc('pointage/s'+sem).get();
+    const p=dp.data || {};
+    if(!p[cle] || !p[cle][iG] || !Array.isArray(p[cle][iG].absents)) return false;
+    let trouve=false;
+    p[cle][iG]={...p[cle][iG], absents:p[cle][iG].absents.map(([n,pr,j])=>{
+      if(norm(n)===norm(nom) && norm(pr)===norm(prenom)){ trouve=true; return [n,pr,!!justifie]; }
+      return [n,pr,j];
+    })};
+    if(!trouve) return false;
+    await db.doc('pointage/s'+sem).set(p);
+    const weekLabel='S'+(sem+1);
+    const dpub=await db.doc('pub/abs').get();
+    const pub=dpub.data || {sem:[]};
+    const widx=(pub.sem||[]).indexOf(weekLabel);
+    if(widx<0) return true;
+    const DUREE=2.5;
+    const appliquer=row=>{
+      if(!row[3]) row[3]=[];
+      if(!row[7]) row[7]=[];
+      while(row[3].length<=widx) row[3].push(0);
+      while(row[7].length<=widx) row[7].push(0);
+      if(justifie){ row[3][widx]=Math.max(0,(row[3][widx]||0)-DUREE); row[7][widx]=(row[7][widx]||0)+DUREE; }
+      else { row[7][widx]=Math.max(0,(row[7][widx]||0)-DUREE); row[3][widx]=(row[3][widx]||0)+DUREE; }
+    };
+    const d1=await db.doc('abs/'+nomGroupe).get();
+    const liste=(d1.data && d1.data.liste) || [];
+    const row=liste.find(l=>norm(l[1])===norm(nom) && norm(l[2])===norm(prenom));
+    if(row){ appliquer(row); await db.doc('abs/'+nomGroupe).set({liste}); }
+    const drow=(D.abs||[]).find(l=>norm(l[0])===norm(nomGroupe) && norm(l[1])===norm(nom) && norm(l[2])===norm(prenom));
+    if(drow) appliquer(drow);
+    ABS_MAJ=0;
+    return true;
+  }catch(e){ return false; }
 }
 
 let ABS_NAV_ADMIN={sem:0};
@@ -3502,31 +3620,16 @@ $('btnDeconnexionAdm').onclick=async()=>{
       .filter(l=>anF==='__ALL__' || String(anneeDeGroupe(l[0]))===anF)
       .filter(l=>grp==='__ALL__' || l[0]===grp)
       .filter(l=>!q || ((l[1]||'')+' '+(l[2]||'')).toUpperCase().includes(q))
-      .map(l=>({grp:l[0], nom:l[1], pre:l[2], h:l[3]||[], tot:totalAbs(l),
+      .map(l=>({grp:l[0], nom:l[1], pre:l[2], h:l[3]||[], hj:l[7]||[], tot:totalAbs(l), totJust:totalJustifie(l),
                 sanction:l[4]||'', obs:l[5]||'', dir:l[6]||''}))
       .sort((a,b)=>b.tot-a.tot);
     if(!lignes.length){ box.innerHTML='<div class="vide-msg">Aucun stagiaire ne correspond.</div>'; return; }
-    const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
-    box.innerHTML=`<div class="cadre-abs">
-      <table class="abs">
-        <tr><th>Rang</th><th class="qui">Stagiaire</th>
-          ${sem.map(s=>`<th class="sem">${s}</th>`).join('')}
-          <th>Total</th><th class="sanc">Sanction</th></tr>
-        ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
-          <td>${i+1}</td>
-          <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
-          ${x.h.map((v,w)=>{ const on=(+v||0)>0;
-            return `<td class="sem${on?' plein clicSem':''}"${on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:''}>${fmt(v)}</td>`; }).join('')}
-          <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
-          <td class="sanc">${x.sanction || '—'}
-            ${x.obs?`<span class="det">${x.obs}</span>`:''}
-            ${x.dir?`<span class="dir">${x.dir}</span>`:''}
-            ${x.tot>SEUIL_CONSEIL?'<span class="pastille conseil">éliminé</span>':''}</td>
-        </tr>`).join('')}
-      </table></div>
-      <p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
-        Au-delà de ${SEUIL_CONSEIL} h, le stagiaire est éliminé (ligne rouge).
-        Cliquez sur une case d'absence pour voir le détail de la semaine.</p>`;
+    box.innerHTML=tableauStagiairesAbsHtml(lignes, sem)+
+      `<p class="note">${lignes.length} stagiaire${lignes.length>1?'s':''}, du plus absent au moins absent.
+        Au-delà de ${SEUIL_CONSEIL} h d'absence NON justifiée (colonne ANJ), le stagiaire est éliminé (ligne rouge).
+        Cliquez sur une case d'absence pour voir le détail de la semaine.
+        Faites glisser le tableau horizontalement pour voir toutes les semaines.</p>`;
+    brancherGlisserHorizontal(box.querySelector('.cadre-abs'));
     box.querySelectorAll('.clicSem').forEach(td=>{
       td.onclick=()=>{
         AT_STAG_DETAIL={grp:td.dataset.grp, nom:td.dataset.nom, pre:td.dataset.pre, w:+td.dataset.w};
