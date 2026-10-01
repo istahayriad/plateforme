@@ -237,8 +237,11 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
   padding:2px 8px; border-radius:6px; background:var(--vert-doux); color:var(--vert); white-space:nowrap;}
 .pastille.bientot{background:var(--alerte-doux); color:var(--alerte);}
 .pastille.fait{background:transparent; color:var(--encre-doux); border:1px solid var(--ligne);}
-.cadre-abs{overflow-x:auto; margin-top:14px; padding-bottom:4px; cursor:grab;}
-.cadre-abs.glisserActif{cursor:grabbing; user-select:none;}
+.cadre-abs{overflow-x:auto; margin-top:14px; padding-bottom:4px;}
+.cadre-abs.glisserOk{cursor:grab;}
+.cadre-abs.glisserOk.glisserActif{cursor:grabbing; user-select:none;}
+.abs .semDebut{border-left:1px solid var(--ligne);}
+.abs .semImpaire{background:var(--bleu-doux);}
 .abs{width:100%; border-collapse:collapse; font-size:13px;}
 .abs th{text-align:center; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.05em;
   text-transform:uppercase; color:var(--encre-doux); font-weight:500; padding:0 6px 8px; border-bottom:1px solid var(--ligne);}
@@ -1009,12 +1012,16 @@ function totalJustifie(l){ return (l[7]||[]).reduce((a,b)=>a+(+b||0),0); }
    (lecture seule) pour ne pas dupliquer la mise en page. */
 function tableauStagiairesAbsHtml(lignes, sem){
   const fmt=x=>(+x||0)===0 ? '·' : (+x).toFixed(1).replace('.',',');
+  /* une semaine sur deux est teintée + bordure à gauche de chaque semaine
+     (demande du 01/10/2026) : sans ça, les 2 colonnes ANJ/ABJ de 42 semaines
+     se confondaient en une seule bande illisible. */
+  const clSem=w=>'sem'+(w>0?' semDebut':'')+(w%2?' semImpaire':'');
   return `<div class="cadre-abs">
     <table class="abs">
       <tr><th rowspan="2">Rang</th><th class="qui" rowspan="2">Stagiaire</th>
-        ${sem.map(s=>`<th class="sem" colspan="2">${s}</th>`).join('')}
+        ${sem.map((s,w)=>`<th class="${clSem(w)}" colspan="2">${s}</th>`).join('')}
         <th rowspan="2">Total</th><th rowspan="2">Absence justifiée</th><th class="sanc" rowspan="2">Sanction</th></tr>
-      <tr>${sem.map(()=>`<th class="sem sousent">ANJ</th><th class="sem sousent">ABJ</th>`).join('')}</tr>
+      <tr>${sem.map((s,w)=>`<th class="${clSem(w)} sousent">ANJ</th><th class="sem sousent${w%2?' semImpaire':''}">ABJ</th>`).join('')}</tr>
       ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
         <td>${i+1}</td>
         <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
@@ -1022,7 +1029,7 @@ function tableauStagiairesAbsHtml(lignes, sem){
           const vj=(x.hj&&x.hj[w])||0;
           const on=(+v||0)>0 || (+vj||0)>0;
           const attrs=on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:'';
-          return `<td class="sem${on?' plein clicSem':''}"${attrs}>${fmt(v)}</td><td class="sem${on?' plein clicSem':''}"${attrs}>${fmt(vj)}</td>`;
+          return `<td class="${clSem(w)}${on?' plein clicSem':''}"${attrs}>${fmt(v)}</td><td class="sem${w%2?' semImpaire':''}${on?' plein clicSem':''}"${attrs}>${fmt(vj)}</td>`;
         }).join('')}
         <td class="tot">${x.tot.toFixed(1).replace('.',',')} h</td>
         <td class="tot">${x.totJust.toFixed(1).replace('.',',')} h</td>
@@ -1502,6 +1509,7 @@ function majGlisser(zone){
 function brancherGlisserHorizontal(el){
   if(!el || el.dataset.glisserOk) return;
   el.dataset.glisserOk='1';
+  el.classList.add('glisserOk');
   let bas=false, depart=0, scrollDepart=0, bouge=false;
   const fin=()=>{
     if(!bas) return;
