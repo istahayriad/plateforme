@@ -1018,7 +1018,11 @@ function totalJustifie(l){ return (l[7]||[]).reduce((a,b)=>a+(+b||0),0); }
 function sallesDuFormateur(iF){
   const s=new Set();
   (D.semaines||[]).forEach(sem=>(sem||[]).forEach(x=>{
-    if(x[0]===iF && x[3]!==1 && D.S[x[4]]) s.add(D.S[x[4]]);
+    if(x[0]===iF && x[3]!==1 && D.S[x[4]]){
+      /* « S21 », « S021 » ou « 21 » = la même salle : on ramène tout à S21 */
+      const c=String(D.S[x[4]]), m=c.match(/\d+/);
+      s.add(m ? 'S'+String(+m[0]).padStart(2,'0') : c);
+    }
   }));
   return [...s].sort((a,b)=>(parseInt(String(a).replace(/\D/g,''))||0)-(parseInt(String(b).replace(/\D/g,''))||0));
 }
