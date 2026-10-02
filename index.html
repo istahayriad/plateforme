@@ -496,7 +496,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
     <div class="onglets noprint" id="onglets" hidden>
       <button data-onglet="moi" class="on">Mon emploi</button>
       <button data-onglet="groupes" id="ongGroupes">Emplois de mes groupes</button>
-      <button data-onglet="abs" id="ongAbs">Absences</button>
+      <button data-onglet="abs" id="ongAbs">Suivi d'absence et discipline</button>
       <button data-onglet="efm">Dates EFM</button>
       <button data-onglet="dem" id="ongDem" hidden>Demandes administratives</button>
     </div>
@@ -529,6 +529,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
       <button data-sous="etat">Groupes</button>
       <button data-sous="jour">Par jour et créneau</button>
       <button data-sous="stag">Stagiaires</button>
+      <button data-sous="disc">Conseil disciplinaire</button>
       <button data-sous="inj">Injection du fichier</button>
     </div>
     <!-- Sous-page 0 : la tournée elle-même (relevé salle par salle), faite
@@ -569,6 +570,10 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
          (pastilles semaine/jour/créneau) — qui, tous groupes confondus, a
          été relevé absent à une case précise, avec son formateur. -->
     <div id="sousJour" hidden><div id="zoneJourAbs"></div></div>
+    <!-- Sous-page 4 : conseil disciplinaire (demande du 01/10/2026) — les
+         rapports envoyés par les formateurs, programmation de la date/créneau
+         du conseil, puis saisie de la sanction. -->
+    <div id="sousDisc" hidden><div id="zoneDisc"></div></div>
     <div id="sousInj" hidden></div>
     <div class="rangee noprint" style="margin-top:20px">
       <button class="action" id="btnImpEtat">Imprimer</button>
@@ -651,6 +656,7 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
             <button data-eu="groupes" class="on">Groupes</button>
             <button data-eu="jour">Par jour et créneau</button>
             <button data-eu="stag">Stagiaires</button>
+            <button data-eu="disc">Conseil disciplinaire</button>
           </div>
           <div id="etatAdminGroupes">
             <div class="rangee noprint" style="margin:14px 0 10px">
@@ -677,6 +683,9 @@ footer.bas button{background:none; border:none; font:inherit; color:var(--encre-
               <input type="search" id="atEtatQ" placeholder="Chercher un stagiaire…" style="font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--papier);color:var(--encre);min-width:200px">
             </div>
             <div id="atZoneDetailAbs"></div>
+          </div>
+          <div id="etatAdminDisc" hidden>
+            <div id="atZoneDisc"></div>
           </div>
         </div>
 
@@ -944,7 +953,7 @@ function afficherEmploi(){
   $('ongDem').hidden=!estF;          // les demandes administratives sont propres aux formateurs
   $('vueDem').hidden=true;
   $('cadreGrille').hidden=false; $('barreSem').hidden=false; $('vueEfm').hidden=true; $('btnImp').hidden=false;
-  $('vueAbs').hidden=true; $('ongAbs').textContent = estF ? 'Absences' : 'Mes absences';
+  $('vueAbs').hidden=true; $('ongAbs').textContent = estF ? 'Suivi d\'absence et discipline' : 'Mes absences';
   $('mesGroupes').hidden=!(estF && onglet==='groupes');
   if(estF && onglet==='groupes'){
     const gs=groupesDuFormateur(profil.iF);
@@ -1050,7 +1059,8 @@ function tauxDe(tot, iG, nbSem){
   return hg>0 ? Math.min(100, tot/hg*100) : null;
 }
 let ABS_VUE_STAG='semaine';   // bascule de « Mes absences » (stagiaire) : 'semaine' ou 'jour'
-let ABS_VUE_F='semaine';      // bascule des « Absences » du formateur
+let ABS_VUE_F='semaine';      // bascule des « Absences » du formateur : 'jour'|'semaine'|'discipline'
+let DISC_COCHES=new Set();    // stagiaires cochés dans le formulaire de rapport disciplinaire (formateur)
 /* Détail jour/créneau d'une absence (demande du 18/09/2026) : source
    différente de « Par semaine » — pas le classeur ABSENCES du
    gestionnaire, mais le relevé de l'agent de sécurité (collection
@@ -1190,17 +1200,18 @@ function afficherAbs(){
     const l=(D.abs||[]).find(x=>norm(x[0])===norm(profil.groupe) &&
               norm(x[1]+' '+x[2])===norm(profil.libelle));
     if(!nb || !l){
-      $('vueAbs').innerHTML=onglets+'<div class="vide-msg">Aucun relevé d\'absence n\'a encore été publié'+
+      $('vueAbs').innerHTML=onglets+'<div id="discStagBox"></div><div class="vide-msg">Aucun relevé d\'absence n\'a encore été publié'+
         ' pour votre groupe. Il apparaîtra ici dès que le service planning l\'aura déposé.</div>';
       $('absVueSem').onclick=()=>{ ABS_VUE_STAG='semaine'; afficherAbs(); };
       $('absVueJour').onclick=()=>{ ABS_VUE_STAG='jour'; afficherAbs(); };
+      afficherDisciplineStagiaire();
       return;
     }
     const tot=totalAbs(l), t=tauxDe(tot, profil.iG, nb), hg=heuresGroupe(profil.iG, nb);
     $('metaEmploi').textContent='Groupe '+profil.groupe+' · relevé sur '+nb+' semaine'+(nb>1?'s':'');
     const cells=sem.map((s,i)=>{ const v=+(l[3]||[])[i]||0;
       return '<td class="sem'+(v?' plein':'')+'">'+(v? fmtH(v) : '·')+'</td>'; }).join('');
-    $('vueAbs').innerHTML=onglets+
+    $('vueAbs').innerHTML=onglets+'<div id="discStagBox"></div>'+
       '<div class="resume" style="margin-top:14px">'+
         '<div class="bloc"><b>'+fmtH(tot)+' h</b><span>absences cumulées</span></div>'+
         '<div class="bloc"><b>'+(t===null?'—':t.toFixed(1).replace('.',',')+' %')+'</b><span>taux d\'absence</span></div>'+
@@ -1217,6 +1228,7 @@ function afficherAbs(){
     $('absVueSem').onclick=()=>{ ABS_VUE_STAG='semaine'; afficherAbs(); };
     $('absVueJour').onclick=()=>{ ABS_VUE_STAG='jour'; afficherAbs(); };
     majGlisser($('vueAbs'));
+    afficherDisciplineStagiaire();
     return;
   }
   // ---- le formateur voit ses groupes ----
@@ -1233,12 +1245,24 @@ function afficherAbs(){
   $('titreEmploi').textContent='Absences — '+code;
   const ongletsF='<div class="onglets noprint" style="margin-top:10px">'+
     '<button id="absVueJourF" class="'+(ABS_VUE_F==='jour'?'on':'')+'">Par jour et créneau</button>'+
-    '<button id="absVueSemF" class="'+(ABS_VUE_F==='semaine'?'on':'')+'">Par semaine</button></div>';
+    '<button id="absVueSemF" class="'+(ABS_VUE_F==='semaine'?'on':'')+'">Par semaine</button>'+
+    '<button id="absVueDiscF" class="'+(ABS_VUE_F==='discipline'?'on':'')+'">Discipline</button></div>';
+  const brancherOngletsF=()=>{
+    $('absVueSemF').onclick=()=>{ ABS_VUE_F='semaine'; afficherAbs(); };
+    $('absVueJourF').onclick=()=>{ ABS_VUE_F='jour'; afficherAbs(); };
+    $('absVueDiscF').onclick=()=>{ ABS_VUE_F='discipline'; afficherAbs(); };
+  };
+  if(ABS_VUE_F==='discipline'){
+    $('metaEmploi').textContent=D.G[gAbs][1]||'';
+    $('vueAbs').innerHTML=ongletsF+'<div id="discZone" style="margin-top:14px"><p class="note">Chargement…</p></div>';
+    brancherOngletsF();
+    renderDisciplineFormateur(gAbs);
+    return;
+  }
   if(ABS_VUE_F==='jour'){
     $('metaEmploi').textContent=D.G[gAbs][1]||'';
     $('vueAbs').innerHTML=ongletsF+'<div id="detailAbsJourF" style="margin-top:14px"></div>';
-    $('absVueSemF').onclick=()=>{ ABS_VUE_F='semaine'; afficherAbs(); };
-    $('absVueJourF').onclick=()=>{ ABS_VUE_F='jour'; afficherAbs(); };
+    brancherOngletsF();
     detailAbsJourFormateur(gAbs);
     return;
   }
@@ -1246,8 +1270,7 @@ function afficherAbs(){
     $('metaEmploi').textContent=D.G[gAbs][1]||'';
     $('vueAbs').innerHTML=ongletsF+'<div class="vide-msg" style="margin-top:14px">Aucun relevé d\'absence publié pour ce groupe. '+
       'Le service planning dépose le fichier tenu par les gestionnaires de stagiaires.</div>';
-    $('absVueSemF').onclick=()=>{ ABS_VUE_F='semaine'; afficherAbs(); };
-    $('absVueJourF').onclick=()=>{ ABS_VUE_F='jour'; afficherAbs(); };
+    brancherOngletsF();
     return;
   }
   const hg=heuresGroupe(gAbs, nb);
@@ -1284,9 +1307,78 @@ function afficherAbs(){
     '<div class="cadre-abs"><table class="abs"><tr><th class="qui">Stagiaire</th>'+
       sem.map(s=>'<th>'+s+'</th>').join('')+
       '<th>Total</th><th>Taux</th><th class="sanc">Sanction</th></tr>'+lignes+'</table></div>';
-  $('absVueSemF').onclick=()=>{ ABS_VUE_F='semaine'; afficherAbs(); };
-  $('absVueJourF').onclick=()=>{ ABS_VUE_F='jour'; afficherAbs(); };
+  brancherOngletsF();
   majGlisser($('vueAbs'));
+}
+/* Sous-onglet « Discipline » du formateur (demande du 01/10/2026) : un
+   formulaire pour signaler un ou plusieurs stagiaires du groupe affiché au
+   conseil de discipline (jour/créneau/salle de l'incident + motif), et la
+   liste des rapports déjà envoyés pour CE groupe — visible par tous les
+   formateurs qui l'enseignent, pas seulement l'auteur. */
+async function renderDisciplineFormateur(gi){
+  const box=$('discZone'); if(!box) return;
+  const code=D.G[gi][0];
+  const {ros}=T_roster();
+  const roster=ros[code]||[];
+  const rapports=await lireDiscipline(code);
+  if(!$('discZone')) return;                       // changement de page entre-temps
+  const jours=joursAnnee();
+  const optJours=jours.map(j=>`<option value="${j.iso}">${j.lib}</option>`).join('');
+  const salles=Array.from({length:30},(_,i)=>'S'+String(i+1).padStart(2,'0'));
+  const clef=([n,p])=>norm(n)+'|'+norm(p);
+  const form = roster.length ? `<div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-bottom:18px;background:var(--papier)">
+      <b style="font-family:'Archivo',sans-serif;font-size:14px">Signaler un incident au conseil de discipline</b>
+      <p class="sous" style="margin:4px 0 10px">Cochez le ou les stagiaires concernés, précisez le jour, le créneau et la
+        salle de l'incident, puis le motif. Le rapport sera visible par tous les formateurs de ${code}.</p>
+      <div class="voletLabelT">Stagiaires concernés</div>
+      <div class="grilleNomsT" id="discCoches">${roster.map(([n,p])=>
+        `<button type="button" class="nomBtnT ${DISC_COCHES.has(clef([n,p]))?'on':''}" data-nom="${n}" data-pre="${p}">${p} ${n}</button>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px">
+        <div class="champ"><label for="discJour">Jour de l'incident</label><select id="discJour">${optJours}</select></div>
+        <div class="champ"><label for="discCr">Créneau</label><select id="discCr">${CRENEAUX_PF.map((c,i)=>`<option value="${i}">${c}</option>`).join('')}</select></div>
+        <div class="champ"><label for="discSalle">Salle</label><select id="discSalle"><option value="">choisir…</option>${salles.map(s=>`<option value="${s}">Salle ${s.replace(/^S0?/,'')}</option>`).join('')}</select></div>
+      </div>
+      <div class="champ" style="margin-top:10px"><label for="discMotif">Motif (pourquoi ce passage en conseil)</label>
+        <textarea id="discMotif" rows="3" style="width:100%;font:inherit;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre)"></textarea></div>
+      <div class="erreur" id="discErr" hidden style="margin-top:8px"></div>
+      <button class="action" id="discEnvoyer" style="margin-top:10px">Envoyer au conseil de discipline</button>
+    </div>` : `<p class="note">Liste des stagiaires de ${code} non disponible.</p>`;
+  const statutLbl=r=> r.statut==='traite' ? 'Traité' : (r.dateConseil ? 'Conseil prévu' : 'En cours');
+  const rap = rapports.slice().sort((a,b)=>(b.creeLe||'').localeCompare(a.creeLe||'')).map(r=>`
+    <div style="border:1px solid var(--alerte);border-radius:12px;padding:12px 16px;margin-bottom:10px;background:var(--alerte-doux)">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <b style="color:var(--alerte)">${r.stagiaires.map(([n,p])=>p+' '+n).join(', ')}</b>
+        <span class="pastille ${r.statut==='traite'?'fait':'conseil'}">${statutLbl(r)}</span>
+      </div>
+      <div class="det" style="margin-top:4px">Incident : ${dateLongue(r.dateIncident)} · ${CRENEAUX_PF[r.creneauIncident]||''}${r.salle?' · Salle '+r.salle.replace(/^S0?/,''):''}</div>
+      <div class="det">Signalé par ${r.auteurNom||r.auteurMat}</div>
+      <div style="margin-top:6px">${r.motif}</div>
+      ${r.dateConseil?`<div class="dir" style="margin-top:6px">Conseil programmé : ${dateLongue(r.dateConseil)} · ${CRENEAUX_PF[r.creneauConseil]||''}</div>`:''}
+      ${r.sanction?`<div class="dir" style="margin-top:6px"><b>Sanction :</b> ${r.sanction}</div>`:''}
+    </div>`).join('');
+  box.innerHTML = form +
+    `<b style="font-family:'Archivo',sans-serif;font-size:14px;display:block;margin-bottom:8px">Rapports disciplinaires — ${code}</b>` +
+    (rap || '<p class="note">Aucun rapport pour ce groupe.</p>');
+  box.querySelectorAll('#discCoches .nomBtnT').forEach(btn=>{
+    btn.onclick=()=>{
+      const k=clef([btn.dataset.nom, btn.dataset.pre]);
+      if(DISC_COCHES.has(k)) DISC_COCHES.delete(k); else DISC_COCHES.add(k);
+      renderDisciplineFormateur(gi);
+    };
+  });
+  const envoyer=$('discEnvoyer');
+  if(envoyer) envoyer.onclick=async()=>{
+    const err=$('discErr'); err.hidden=true;
+    const choisis=roster.filter(([n,p])=>DISC_COCHES.has(clef([n,p])));
+    const motif=($('discMotif').value||'').trim();
+    if(!choisis.length){ err.textContent='Cochez au moins un stagiaire.'; err.hidden=false; return; }
+    if(!motif){ err.textContent='Écrivez le motif.'; err.hidden=false; return; }
+    envoyer.disabled=true; envoyer.textContent='Envoi…';
+    const ok=await envoyerRapportDiscipline(code, choisis, $('discJour').value, $('discCr').value, $('discSalle').value, motif);
+    if(!ok){ err.textContent='Envoi impossible : vérifiez la connexion internet.'; err.hidden=false; envoyer.disabled=false; envoyer.textContent='Envoyer au conseil de discipline'; return; }
+    DISC_COCHES=new Set();
+    renderDisciplineFormateur(gi);
+  };
 }
 let ABS_NAV_F={sem:0};
 /* Formateur, vue « par jour et créneau » (demande du 18/09/2026, revue en
@@ -1599,7 +1691,7 @@ function choisirOnglet(o){
   $('vueDem').hidden=true;
   if(o==='dem'){ afficherDemandes(); return; }
   if(o==='efm'){ afficherEfm(); return; }
-  if(o==='abs'){ $('ongAbs').textContent = profil.type==='F' ? 'Absences' : 'Mes absences'; afficherAbs(); return; }
+  if(o==='abs'){ $('ongAbs').textContent = profil.type==='F' ? 'Suivi d\'absence et discipline' : 'Mes absences'; afficherAbs(); return; }
   if(o==='moi'){
     cible = profil.type==='F' ? {type:'F', iF:profil.iF, libelle:profil.libelle}
                               : {type:'S', iG:profil.iG, groupe:profil.groupe, libelle:profil.libelle};
@@ -2461,6 +2553,148 @@ function joursAnnee(){
     out.push({iso, lib:'S'+(w+1)+' · '+dateLongue(iso)});
   }
   return out;
+}
+/* ------------------------- conseil disciplinaire -------------------------
+   Un formateur signale un ou plusieurs stagiaires d'un même groupe pour le
+   conseil de discipline (jour/créneau/salle de l'incident + motif). Le
+   rapport est stocké PAR GROUPE (document « disc/<groupe> », même principe
+   que abs/<groupe>) et visible par TOUS les formateurs de ce groupe, pas
+   seulement l'auteur. Les gestionnaires programment le conseil (date +
+   créneau) puis, une fois tenu, saisissent la sanction — les deux étapes
+   mettent à jour le même rapport, lu aussi par le stagiaire concerné dans
+   « Mes absences ». */
+async function lireDiscipline(groupe){
+  if(!db) return [];
+  try{ const d=await db.doc('disc/'+groupe).get(); return (d.exists && d.data && d.data.liste) || []; }
+  catch(e){ return []; }
+}
+async function ecrireDiscipline(groupe, liste){
+  if(!db) return false;
+  try{
+    await db.doc('disc/'+groupe).set({liste});
+    const dp=await db.doc('pub/disc').get();
+    const pub=(dp.data)||{groupes:[]};
+    const groupes=new Set(pub.groupes||[]); groupes.add(groupe);
+    await db.doc('pub/disc').set({groupes:[...groupes]});
+    return true;
+  }catch(e){ return false; }
+}
+async function envoyerRapportDiscipline(groupe, stagiaires, dateIncident, creneauIncident, salle, motif){
+  if(!stagiaires.length || !motif.trim()) return false;
+  const liste=await lireDiscipline(groupe);
+  liste.push({
+    id: Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    stagiaires, dateIncident, creneauIncident:+creneauIncident, salle, motif:motif.trim(),
+    auteurMat: profil.matricule||'', auteurNom: profil.libelle||'',
+    creeLe: new Date().toISOString(),
+    statut:'en_cours', dateConseil:'', creneauConseil:null, sanction:''
+  });
+  return ecrireDiscipline(groupe, liste);
+}
+async function programmerConseil(groupe, id, dateConseil, creneauConseil){
+  const liste=await lireDiscipline(groupe);
+  const r=liste.find(x=>x.id===id); if(!r) return false;
+  r.dateConseil=dateConseil; r.creneauConseil=+creneauConseil;
+  return ecrireDiscipline(groupe, liste);
+}
+async function validerSanctionDiscipline(groupe, id, sanction){
+  const liste=await lireDiscipline(groupe);
+  const r=liste.find(x=>x.id===id); if(!r) return false;
+  r.sanction=sanction.trim(); r.statut='traite';
+  return ecrireDiscipline(groupe, liste);
+}
+/* Bandeau rouge dans « Mes absences » (stagiaire) : ses propres rapports
+   disciplinaires, filtrés par nom/prénom parmi ceux de son groupe. Pas le
+   motif (écrit par le formateur pour le conseil, pas pour le stagiaire) —
+   seulement le statut, la date du conseil une fois programmée, et la
+   sanction une fois le conseil tenu. */
+async function afficherDisciplineStagiaire(){
+  const box=$('discStagBox'); if(!box || profil.type!=='S') return;
+  const rapports=await lireDiscipline(profil.groupe);
+  if(!$('discStagBox')) return;
+  const miens=rapports.filter(r=>r.stagiaires.some(([n,p])=>norm(n+' '+p)===norm(profil.libelle) || norm(p+' '+n)===norm(profil.libelle)));
+  if(!miens.length){ box.innerHTML=''; return; }
+  box.innerHTML=miens.slice().sort((a,b)=>(b.creeLe||'').localeCompare(a.creeLe||'')).map(r=>{
+    if(r.statut==='traite') return `<div class="bandeau-alerte">Votre dossier est passé en conseil de discipline le ${dateLongue(r.dateConseil)}.
+      <b>Sanction : ${r.sanction}</b></div>`;
+    if(r.dateConseil) return `<div class="bandeau-alerte">Vous êtes convoqué(e) au conseil de discipline le ${dateLongue(r.dateConseil)}
+      · ${CRENEAUX_PF[r.creneauConseil]||''}.</div>`;
+    return `<div class="bandeau-alerte">Votre dossier a été transmis au conseil de discipline. La date vous sera communiquée.</div>`;
+  }).join('');
+}
+/* Tableau de bord « Conseil disciplinaire » (gestionnaire ET direction,
+   demande du 01/10/2026) : tous les rapports envoyés par les formateurs
+   (collection disc/<groupe>, découverte via pub/disc.groupes), avec pour
+   chacun soit la programmation du conseil (date+créneau) si rien n'est
+   encore programmé, soit la saisie de la sanction si le conseil est
+   programmé mais pas encore tenu, soit la lecture seule si déjà traité. */
+async function renderConseilDiscipline(boxId, editable){
+  const box=$(boxId); if(!box) return;
+  box.innerHTML='<p class="note">Chargement…</p>';
+  const dp=await db.doc('pub/disc').get();
+  const groupes=(dp.data && dp.data.groupes) || [];
+  if(!$(boxId)) return;
+  if(!groupes.length){ box.innerHTML='<div class="vide-msg">Aucun rapport disciplinaire.</div>'; return; }
+  let rapports=[];
+  for(const g of groupes){
+    const liste=await lireDiscipline(g);
+    liste.forEach(r=>rapports.push({...r, groupe:g}));
+  }
+  if(!$(boxId)) return;
+  if(!rapports.length){ box.innerHTML='<div class="vide-msg">Aucun rapport disciplinaire.</div>'; return; }
+  rapports.sort((a,b)=>{
+    const ordre=x=>x.statut==='traite'?2:(x.dateConseil?1:0);
+    return ordre(a)-ordre(b) || (b.creeLe||'').localeCompare(a.creeLe||'');
+  });
+  const optJours=joursAnnee().map(j=>`<option value="${j.iso}">${j.lib}</option>`).join('');
+  const statutLbl=r=> r.statut==='traite' ? 'Traité' : (r.dateConseil ? 'Conseil prévu' : 'En cours');
+  box.innerHTML = rapports.map(r=>`
+    <div style="border:1px solid var(--alerte);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--alerte-doux)" data-groupe="${r.groupe}" data-id="${r.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <b style="color:var(--alerte)">${r.groupe} — ${r.stagiaires.map(([n,p])=>p+' '+n).join(', ')}</b>
+        <span class="pastille ${r.statut==='traite'?'fait':'conseil'}">${statutLbl(r)}</span>
+      </div>
+      <div class="det" style="margin-top:4px">Incident : ${dateLongue(r.dateIncident)} · ${CRENEAUX_PF[r.creneauIncident]||''}${r.salle?' · Salle '+r.salle.replace(/^S0?/,''):''}</div>
+      <div class="det">Signalé par ${r.auteurNom||r.auteurMat}</div>
+      <div style="margin-top:6px">${r.motif}</div>
+      ${r.dateConseil?`<div class="dir" style="margin-top:6px">Conseil programmé : ${dateLongue(r.dateConseil)} · ${CRENEAUX_PF[r.creneauConseil]||''}</div>`:''}
+      ${r.sanction?`<div class="dir" style="margin-top:6px"><b>Sanction :</b> ${r.sanction}</div>`:''}
+      ${editable && !r.dateConseil ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:flex-end">
+          <div class="champ"><label>Date du conseil</label><select class="discDateConseil">${optJours}</select></div>
+          <div class="champ"><label>Créneau</label><select class="discCrConseil">${CRENEAUX_PF.map((c,i)=>`<option value="${i}">${c}</option>`).join('')}</select></div>
+          <button class="action fantome btnProgConseil">Programmer le conseil</button>
+        </div>` : ''}
+      ${editable && r.dateConseil && r.statut!=='traite' ? `
+        <div style="margin-top:10px">
+          <div class="champ"><label>Sanction</label>
+            <textarea class="discSanction" rows="2" style="width:100%;font:inherit;padding:8px 10px;border-radius:9px;border:1px solid var(--ligne);background:var(--carte);color:var(--encre)"></textarea></div>
+          <button class="action btnValSanction" style="margin-top:6px">Enregistrer la sanction</button>
+        </div>` : ''}
+    </div>`).join('');
+  box.querySelectorAll('.btnProgConseil').forEach(btn=>{
+    btn.onclick=async()=>{
+      const carte=btn.closest('[data-groupe]');
+      const groupe=carte.dataset.groupe, id=carte.dataset.id;
+      const date=carte.querySelector('.discDateConseil').value, cr=carte.querySelector('.discCrConseil').value;
+      btn.disabled=true; btn.textContent='Enregistrement…';
+      const ok=await programmerConseil(groupe, id, date, cr);
+      if(!ok){ alert('Enregistrement impossible : vérifiez la connexion internet.'); btn.disabled=false; btn.textContent='Programmer le conseil'; return; }
+      renderConseilDiscipline(boxId, editable);
+    };
+  });
+  box.querySelectorAll('.btnValSanction').forEach(btn=>{
+    btn.onclick=async()=>{
+      const carte=btn.closest('[data-groupe]');
+      const groupe=carte.dataset.groupe, id=carte.dataset.id;
+      const sanction=(carte.querySelector('.discSanction').value||'').trim();
+      if(!sanction){ alert('Écrivez la sanction.'); return; }
+      btn.disabled=true; btn.textContent='Enregistrement…';
+      const ok=await validerSanctionDiscipline(groupe, id, sanction);
+      if(!ok){ alert('Enregistrement impossible : vérifiez la connexion internet.'); btn.disabled=false; btn.textContent='Enregistrer la sanction'; return; }
+      renderConseilDiscipline(boxId, editable);
+    };
+  });
 }
 async function lireRattrapages(mat){
   if(!db) return {liste:[]};
@@ -3557,10 +3791,12 @@ $('btnDeconnexionAdm').onclick=async()=>{
     $('etatAdminGroupes').hidden = n!=='groupes';
     $('etatAdminJour').hidden = n!=='jour';
     $('etatAdminStag').hidden = n!=='stag';
+    $('etatAdminDisc').hidden = n!=='disc';
     document.querySelectorAll('#ongletsEtatAdmin button').forEach(b=>b.classList.toggle('on', b.dataset.eu===n));
     if(n==='groupes') AT_etatGroupes();
     if(n==='jour') AT_parJour();
     if(n==='stag') AT_stagiaires();
+    if(n==='disc') renderConseilDiscipline('atZoneDisc', true);
   }
   document.querySelectorAll('#ongletsEtatAdmin button').forEach(b=>b.onclick=()=>absEtatSousVue(b.dataset.eu));
   let AT_JOUR_NAV={sem:0}, AT_JOUR_GI=null, AT_JOUR_AN='__ALL__';
@@ -3678,6 +3914,19 @@ $('btnDeconnexionAdm').onclick=async()=>{
     }catch(e){ AT_POINTAGE={}; }
     AT_rendreDetail();
   }
+  /* Rafraîchissement automatique (02/10/2026) : les relevés des gestionnaires
+     apparaissent seuls toutes les 15 s tant que cet écran est ouvert — une
+     simple relecture de pointage/s<n>, sans effacer l'écran ("Chargement…")
+     pour éviter le clignotement. */
+  setInterval(async()=>{
+    const zone=$('absAdminTournee'), admin=$('vueAdmin');
+    if(!zone || zone.hidden || !admin || admin.hidden || document.hidden || !D) return;
+    try{
+      const dp=await db.doc('pointage/s'+AT_SEM).get();
+      const neuf=dp.data || {};
+      if(JSON.stringify(neuf)!==JSON.stringify(AT_POINTAGE)){ AT_POINTAGE=neuf; AT_rendreDetail(); }
+    }catch(e){}
+  }, 15000);
   function AT_lignesParGroupe(sessions){
     const l=[];
     sessions.forEach(s=>{
@@ -3777,6 +4026,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
     $('sousEtat').hidden = n!=='etat';
     $('sousStag').hidden = n!=='stag';
     $('sousJour').hidden = n!=='jour';
+    $('sousDisc').hidden = n!=='disc';
     $('sousInj').hidden  = n!=='inj';
     document.querySelectorAll('#vueEtat .onglets button')
       .forEach(b=>b.classList.toggle('on', b.dataset.sous===n));
@@ -3784,9 +4034,11 @@ $('btnDeconnexionAdm').onclick=async()=>{
                                : n==='etat' ? 'État des absences par groupe'
                                : n==='stag' ? 'État des absences par stagiaire'
                                : n==='jour' ? 'État des absences par jour et créneau'
+                               : n==='disc' ? 'Conseil disciplinaire'
                                : 'Injection de l’état des absences';
     if(n==='tournee'){ T_demarrer(); return; }
     if(n==='jour'){ afficherAbsJourAdmin(); return; }
+    if(n==='disc'){ renderConseilDiscipline('zoneDisc', true); return; }
     if(n==='inj'){
       const bloc=$('fAbs') && $('fAbs').closest('fieldset');
       if(bloc && bloc.parentElement!==$('sousInj')){
