@@ -1349,7 +1349,7 @@ async function renderDisciplineFormateur(gi){
         salle de l'incident, puis le motif. Le rapport sera visible par tous les formateurs de ${code}.</p>
       <div class="voletLabelT">Stagiaires concernés</div>
       <div class="grilleNomsT" id="discCoches">${roster.map(([n,p])=>
-        `<button type="button" class="nomBtnT ${DISC_COCHES.has(clef([n,p]))?'on':''}" data-nom="${n}" data-pre="${p}">${p} ${n}</button>`).join('')}</div>
+        `<button type="button" class="nomBtnT ${DISC_COCHES.has(clef([n,p]))?'on':''}" data-nom="${n}" data-pre="${p}">${n} ${p}</button>`).join('')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px">
         <div class="champ"><label for="discJour">Jour de l'incident</label><select id="discJour">${optJours}</select></div>
         <div class="champ"><label for="discCr">Créneau</label><select id="discCr">${CRENEAUX_PF.map((c,i)=>`<option value="${i}">${c}</option>`).join('')}</select></div>
@@ -1364,7 +1364,7 @@ async function renderDisciplineFormateur(gi){
   const rap = rapports.slice().sort((a,b)=>(b.creeLe||'').localeCompare(a.creeLe||'')).map(r=>`
     <div style="border:1px solid var(--alerte);border-radius:12px;padding:12px 16px;margin-bottom:10px;background:var(--alerte-doux)">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <b style="color:var(--alerte)">${r.stagiaires.map(([n,p])=>p+' '+n).join(', ')}</b>
+        <b style="color:var(--alerte)">${r.stagiaires.map(([n,p])=>n+' '+p).join(', ')}</b>
         <span class="pastille ${r.statut==='traite'?'fait':'conseil'}">${statutLbl(r)}</span>
       </div>
       <div class="det" style="margin-top:4px">Incident : ${dateLongue(r.dateIncident)} · ${CRENEAUX_PF[r.creneauIncident]||''}${r.salle?' · Salle '+r.salle.replace(/^S0?/,''):''}</div>
@@ -2668,7 +2668,7 @@ async function renderConseilDiscipline(boxId, editable){
   box.innerHTML = rapports.map(r=>`
     <div style="border:1px solid var(--alerte);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--alerte-doux)" data-groupe="${r.groupe}" data-id="${r.id}">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <b style="color:var(--alerte)">${r.groupe} — ${r.stagiaires.map(([n,p])=>p+' '+n).join(', ')}</b>
+        <b style="color:var(--alerte)">${r.groupe} — ${r.stagiaires.map(([n,p])=>n+' '+p).join(', ')}</b>
         <span class="pastille ${r.statut==='traite'?'fait':'conseil'}">${statutLbl(r)}</span>
       </div>
       <div class="det" style="margin-top:4px">Incident : ${dateLongue(r.dateIncident)} · ${CRENEAUX_PF[r.creneauIncident]||''}${r.salle?' · Salle '+r.salle.replace(/^S0?/,''):''}</div>
@@ -3630,7 +3630,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
       const absentsIdx = enAttente ? enAttente.absentsIdx : new Set();
       const etat = enAttente ? enAttente.etat : null;
       const grilleNoms=roster.map(([nom,prenom],i)=>
-        `<button class="nomBtnT ${absentsIdx.has(i)?'on':''}" data-gi="${gi}" data-fi="${fi}" data-idx="${i}">${prenom} ${nom}</button>`).join('');
+        `<button class="nomBtnT ${absentsIdx.has(i)?'on':''}" data-gi="${gi}" data-fi="${fi}" data-idx="${i}">${nom} ${prenom}</button>`).join('');
       const effectif=eff[nomGroupe];
       return `<div class="ligneFT" data-gi="${gi}">
         <div class="nom">${nomGroupe}${effectif?` <span class="effectif">${effectif} stagiaires</span>`:''}</div>
