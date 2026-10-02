@@ -1012,6 +1012,16 @@ function lignesAbs(groupe){
 }
 function totalAbs(l){ return (l[3]||[]).reduce((a,b)=>a+(+b||0),0); }
 function totalJustifie(l){ return (l[7]||[]).reduce((a,b)=>a+(+b||0),0); }
+/* Salles réellement affectées à l'emploi d'un formateur (sur les semaines
+   publiées, FAD exclu) — seules proposées dans « Dates EFM » et « Discipline »
+   (demande du 02/10/2026). */
+function sallesDuFormateur(iF){
+  const s=new Set();
+  (D.semaines||[]).forEach(sem=>(sem||[]).forEach(x=>{
+    if(x[0]===iF && x[3]!==1 && D.S[x[4]]) s.add(D.S[x[4]]);
+  }));
+  return [...s].sort((a,b)=>(parseInt(String(a).replace(/\D/g,''))||0)-(parseInt(String(b).replace(/\D/g,''))||0));
+}
 /* Tous les stagiaires de la liste publiée apparaissent dans « Stagiaires »
    (02/10/2026, cas DEV105 : 25 stagiaires publiés, 4 seulement affichés) :
    une ligne d'absence n'existe qu'à partir de la première absence relevée ;
@@ -1341,7 +1351,7 @@ async function renderDisciplineFormateur(gi){
   if(!$('discZone')) return;                       // changement de page entre-temps
   const jours=joursAnnee();
   const optJours=jours.map(j=>`<option value="${j.iso}">${j.lib}</option>`).join('');
-  const salles=Array.from({length:30},(_,i)=>'S'+String(i+1).padStart(2,'0'));
+  const salles=sallesDuFormateur(profil.iF);
   const clef=([n,p])=>norm(n)+'|'+norm(p);
   const form = roster.length ? `<div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-bottom:18px;background:var(--papier)">
       <b style="font-family:'Archivo',sans-serif;font-size:14px">Signaler un incident au conseil de discipline</b>
@@ -1657,7 +1667,7 @@ async function afficherEfm(){
   if(profil.type==='F'){
     const mg=modulesGroupesDe(profil.iF);
     /* salles 1 à 30 dans l'ordre numérique, sans FAD ni salle vide */
-    const salles=Array.from({length:30},(_,i)=>'S'+String(i+1).padStart(2,'0'));
+    const salles=sallesDuFormateur(profil.iF);
     form=`<div style="border:1px solid var(--ligne);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--papier)">
       <b style="font-family:'Archivo',sans-serif;font-size:14px">Annoncer un EFM</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px">
