@@ -1012,6 +1012,22 @@ function lignesAbs(groupe){
 }
 function totalAbs(l){ return (l[3]||[]).reduce((a,b)=>a+(+b||0),0); }
 function totalJustifie(l){ return (l[7]||[]).reduce((a,b)=>a+(+b||0),0); }
+/* Tous les stagiaires de la liste publiée apparaissent dans « Stagiaires »
+   (02/10/2026, cas DEV105 : 25 stagiaires publiés, 4 seulement affichés) :
+   une ligne d'absence n'existe qu'à partir de la première absence relevée ;
+   les autres reçoivent ici une ligne vide (non enregistrée). */
+function absAvecRoster(){
+  const abs=(D && D.abs) || [];
+  const vus=new Set(abs.map(l=>norm(l[0])+'|'+norm(l[1])+'|'+norm(l[2])));
+  const extra=[];
+  (D.stagiaires||[]).forEach(s=>{
+    const nom=s&&s[0], pre=(s&&s[1])||'', g=s&&s[2];
+    if(!g || !nom) return;
+    const k=norm(g)+'|'+norm(nom)+'|'+norm(pre);
+    if(!vus.has(k)){ vus.add(k); extra.push([g,nom,pre,[],'','','']); }
+  });
+  return abs.concat(extra);
+}
 /* Tableau « Stagiaires » de l'État des absences (gestionnaire ET direction,
    demande du 01/10/2026) : chaque semaine porte désormais DEUX colonnes —
    ANJ (absence non justifiée, sanctionnable, l[3]) et ABJ (absence
@@ -1034,7 +1050,8 @@ function tableauStagiairesAbsHtml(lignes, sem){
       ${lignes.map((x,i)=>`<tr class="${x.tot>SEUIL_CONSEIL?'conseil':(x.tot>=SEUIL_CONSEIL/2?'rouge':'')}">
         <td>${i+1}</td>
         <td class="qui">${x.nom} ${x.pre}<small>${x.grp}</small></td>
-        ${x.h.map((v,w)=>{
+        ${sem.map((_,w)=>{
+          const v=x.h[w]||0;
           const vj=(x.hj&&x.hj[w])||0;
           const on=(+v||0)>0 || (+vj||0)>0;
           const attrs=on?` data-grp="${x.grp}" data-nom="${x.nom}" data-pre="${x.pre}" data-w="${w}" style="cursor:pointer" title="Voir le détail de cette semaine"`:'';
@@ -2358,7 +2375,7 @@ function detailAbsences(){
     return;
   }
   if(filtres) filtres.hidden=false;
-  const abs=(D && D.abs) || [];
+  const abs=absAvecRoster();
   const sem=semAbs();
   const grp=($('etatGrp')||{}).value || '__ALL__';
   const anF=($('etatAn2')||{}).value || '__ALL__';
@@ -3844,7 +3861,7 @@ $('btnDeconnexionAdm').onclick=async()=>{
       return;
     }
     if(filtres) filtres.hidden=false;
-    const abs=(D && D.abs) || [];
+    const abs=absAvecRoster();
     const sem=semAbs();
     const grp=($('atEtatGrp')||{}).value || '__ALL__';
     const anF=($('atEtatAn2')||{}).value || '__ALL__';
