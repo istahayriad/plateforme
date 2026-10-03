@@ -260,6 +260,9 @@ button.action:focus-visible{outline:2px solid var(--encre); outline-offset:2px;}
 .abs tr.conseil td.qui{font-weight:700; color:var(--alerte);}
 .abs tr.conseil td.tot{color:var(--alerte); font-weight:700;}
 .pastille.conseil{background:var(--alerte); color:#fff;}
+.alerteDisc::after{content:attr(data-n); display:inline-block; margin-left:7px; min-width:18px; padding:1px 6px; border-radius:999px; background:var(--alerte); color:#fff; font:600 11px/1.5 'IBM Plex Mono',monospace; text-align:center; vertical-align:middle}
+.bandeau-disc{margin:12px 0 14px; padding:12px 16px; border-radius:10px; background:var(--alerte-doux); border:1px solid var(--alerte); color:var(--alerte); font-weight:600}
+.bandeau-disc button{margin-left:10px; font:inherit; font-size:12.5px; padding:4px 10px; border-radius:8px; border:1px solid var(--alerte); background:var(--alerte); color:#fff; cursor:pointer}
 .bandeau-dir{margin-top:12px; padding:12px 16px; border-radius:10px; background:var(--alerte);
   color:#fff; font-size:13.5px; line-height:1.45;}
 .bandeau-dir b{display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.08em;
@@ -1398,7 +1401,7 @@ async function renderDisciplineFormateur(gi){
       ${r.dateConseil?`<div class="dir" style="margin-top:6px">Conseil programmé : ${dateLongue(r.dateConseil)} · ${CRENEAUX_PF[r.creneauConseil]||''}</div>`:''}
       ${r.sanction?`<div class="dir" style="margin-top:6px"><b>Sanction :</b> ${r.sanction}</div>`:''}
     </div>`).join('');
-  box.innerHTML = form +
+  box.innerHTML = bandeauDiscF(rapports) + form +
     `<b style="font-family:'Archivo',sans-serif;font-size:14px;display:block;margin-bottom:8px">Rapports disciplinaires — ${code}</b>` +
     (rap || '<p class="note">Aucun rapport pour ce groupe.</p>');
   box.querySelectorAll('#discCoches .nomBtnT').forEach(btn=>{
@@ -2617,10 +2620,93 @@ async function ecrireDiscipline(groupe, liste){
     const dp=await db.doc('pub/disc').get();
     const pub=(dp.data)||{groupes:[]};
     const groupes=new Set(pub.groupes||[]); groupes.add(groupe);
-    await db.doc('pub/disc').set({groupes:[...groupes]});
+    await db.doc('pub/disc').set({groupes:[...groupes]}); DISC_ACTIFS_T=0;
     return true;
   }catch(e){ return false; }
 }
+/* Alertes rouges « discipline » (demande du 03/10/2026) : un rapport envoyé par
+   un formateur restait invisible pour les autres formateurs du groupe tant
+   qu'ils n'ouvraient pas Suivi d'absence → Discipline. On relève donc, pour
+   chaque groupe, les rapports NON TRAITÉS (statut différent de « traité »), et
+   on pose une pastille rouge avec leur nombre : sur l'onglet « Suivi d'absence
+   et discipline », sur la pastille du groupe, sur le sous-onglet « Discipline »
+   et, pour les gestionnaires et la direction, sur « Conseil disciplinaire ». Un
+   bandeau rouge s'affiche aussi en haut des absences du groupe concerné. */
+let DISC_ACTIFS={}, DISC_ACTIFS_T=0, DISC_MAJ_EN_COURS=false;
+function nbDiscActifs(){ return Object.values(DISC_ACTIFS).reduce((a,b)=>a+b,0); }
+async function majAlertesDisc(force){
+  if(!db || DISC_MAJ_EN_COURS) return DISC_ACTIFS;
+  if(!force && Date.now()-DISC_ACTIFS_T<15000) return DISC_ACTIFS;
+  DISC_MAJ_EN_COURS=true;
+  try{
+    const dp=await db.doc('pub/disc').get();
+    const groupes=(dp.data && dp.data.groupes) || [];
+    const o={};
+    for(const g of groupes){
+      const l=await lireDiscipline(g);
+      const n=l.filter(r=>r.statut!=='traite').length;
+      if(n) o[g]=n;
+    }
+    DISC_ACTIFS=o; DISC_ACTIFS_T=Date.now();
+  }catch(e){}
+  DISC_MAJ_EN_COURS=false;
+  return DISC_ACTIFS;
+}
+function marquerDisc(el,n){
+  if(!el) return;
+  if(n>0){ el.classList.add('alerteDisc'); el.dataset.n=n; el.title=n+' rapport(s) disciplinaire(s) non traité(s)'; }
+  else { el.classList.remove('alerteDisc'); delete el.dataset.n; el.removeAttribute('title'); }
+}
+function bandeauDiscF(rapports){
+  const n=(rapports||[]).filter(r=>r.statut!=='traite').length;
+  return n ? `<div class="bandeau-disc">⚠ ${n} rapport(s) disciplinaire(s) non traité(s) pour ce groupe. Il(s) figure(nt) ci-dessous.</div>` : '';
+}
+function bandeauDiscGest(rapports){
+  const nt=(rapports||[]).filter(r=>r.statut!=='traite');
+  if(!nt.length) return '';
+  const aProg=nt.filter(r=>!r.dateConseil).length, aSanc=nt.length-aProg;
+  return `<div class="bandeau-disc">⚠ ${nt.length} rapport(s) non traité(s) : ${aProg} conseil(s) à programmer, ${aSanc} sanction(s) à saisir.</div>`;
+}
+function appliquerAlertesDisc(){
+  try{
+    if(typeof profil!=='undefined' && profil && profil.type==='F'){
+      const gs=groupesDuFormateur(profil.iF);
+      const n=gs.reduce((a,i)=>a+(DISC_ACTIFS[D.G[i][0]]||0),0);
+      marquerDisc($('ongAbs'),n);
+      document.querySelectorAll('#mesGroupes .gchip').forEach(b=>{
+        const g=D.G[+b.dataset.g]; marquerDisc(b, g ? (DISC_ACTIFS[g[0]]||0) : 0);
+      });
+      const cur=(gAbs!==null && D.G[gAbs]) ? (DISC_ACTIFS[D.G[gAbs][0]]||0) : 0;
+      marquerDisc($('absVueDiscF'),cur);
+      const va=$('vueAbs'), ancien=$('bandDisc'); if(ancien) ancien.remove();
+      if(va && !va.hidden && cur>0 && ABS_VUE_F!=='discipline'){
+        const d=document.createElement('div'); d.className='bandeau-disc'; d.id='bandDisc';
+        d.innerHTML='⚠ '+cur+' rapport(s) disciplinaire(s) non traité(s) pour '+D.G[gAbs][0]+'. <button type="button" id="bandDiscVoir">Voir la discipline</button>';
+        va.insertBefore(d, va.firstChild);
+        $('bandDiscVoir').onclick=()=>{ ABS_VUE_F='discipline'; afficherAbs(); };
+      }
+    }
+    else {
+      marquerDisc($('ongAbs'),0); marquerDisc($('absVueDiscF'),0);
+      document.querySelectorAll('#mesGroupes .gchip').forEach(b=>marquerDisc(b,0));
+      const ba=$('bandDisc'); if(ba) ba.remove();
+    }
+    const tot=nbDiscActifs();
+    document.querySelectorAll('[data-sous="disc"],[data-eu="disc"]').forEach(b=>marquerDisc(b,tot));
+  }catch(e){}
+}
+function alertesDiscUtiles(){
+  if(typeof profil!=='undefined' && profil && profil.type==='F') return true;
+  return [...document.querySelectorAll('[data-sous="disc"],[data-eu="disc"]')].some(b=>b.offsetParent!==null);
+}
+async function tickAlertesDisc(force){
+  if(!alertesDiscUtiles()) return;
+  await majAlertesDisc(force);
+  appliquerAlertesDisc();
+}
+setInterval(()=>tickAlertesDisc(true), 12000);
+document.addEventListener('click',()=>{ setTimeout(()=>{ appliquerAlertesDisc(); tickAlertesDisc(false); }, 400); });
+setTimeout(()=>tickAlertesDisc(true), 2500);
 async function envoyerRapportDiscipline(groupe, stagiaires, dateIncident, creneauIncident, salle, motif){
   if(!stagiaires.length || !motif.trim()) return false;
   const liste=await lireDiscipline(groupe);
@@ -2690,7 +2776,7 @@ async function renderConseilDiscipline(boxId, editable){
   });
   const optJours=joursAnnee().map(j=>`<option value="${j.iso}">${j.lib}</option>`).join('');
   const statutLbl=r=> r.statut==='traite' ? 'Traité' : (r.dateConseil ? 'Conseil prévu' : 'En cours');
-  box.innerHTML = rapports.map(r=>`
+  box.innerHTML = bandeauDiscGest(rapports) + rapports.map(r=>`
     <div style="border:1px solid var(--alerte);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--alerte-doux)" data-groupe="${r.groupe}" data-id="${r.id}">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <b style="color:var(--alerte)">${r.groupe} — ${r.stagiaires.map(([n,p])=>n+' '+p).join(', ')}</b>
