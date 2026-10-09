@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISTA Hay Riad — Suivi d'absence</title>
+<style>
+:root{--bleu:#2559A8; --bleu-fonce:#0E3061; --bleu-clair:#E4ECF8; --ink:#141B2D; --soft:#5B6B88; --line:#DCE1EA;
+  --vert:#2E7D4F; --vert-clair:#E2F3E8; --rouge:#B3302E; --rouge-clair:#FBE4E2; --paper:#F2F4F7;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px}
+.wrap{max-width:980px;margin:0 auto;padding:14px 14px 40px}
+h1{font-size:19px;margin:0}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:2px 0 12px;flex-wrap:wrap}
+.brand small{color:var(--soft);font-size:13px}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:10px 14px}
+button:disabled{opacity:.4;cursor:default}
+.action{background:var(--bleu);color:#fff;border-color:var(--bleu);font-weight:700}
+.lien{background:none;border:none;color:var(--bleu);text-decoration:underline;padding:8px 2px;font-size:14px}
+.carte{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.erreur{color:var(--rouge);font-size:14px;margin:8px 0 0}
+.ok{color:var(--vert);font-size:14px}
+input[type=text],input[type=email],input[type=password],input[type=file]{font:inherit;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+label{font-size:13px;color:var(--soft);display:block;margin:10px 0 4px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin-bottom:4px}
+.chip{white-space:nowrap;padding:8px 13px;font-size:14px;border-radius:999px;flex:0 0 auto}
+.chip.on{background:var(--bleu);color:#fff;border-color:var(--bleu);font-weight:700}
+.chip.auj{box-shadow:0 0 0 2px var(--bleu-clair) inset}
+.creneaux{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 12px}
+.creneaux button{padding:10px 4px;font-size:13px;font-weight:600;line-height:1.25}
+.creneaux button.on{background:var(--bleu);color:#fff;border-color:var(--bleu)}
+.salles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tuile{min-height:98px;border-radius:14px;border:2px solid var(--line);background:#fff;padding:10px 8px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:5px}
+.tuile b{font-size:20px;line-height:1.15;word-break:break-word}
+.tuile span{color:var(--soft);font-size:15px}
+.tuile.oui{background:var(--vert-clair);border-color:var(--vert)}
+.tuile.non{background:var(--rouge-clair);border-color:var(--rouge)}
+.vide{color:var(--soft);text-align:center;padding:26px 6px}
+/* détail d'un groupe : OUI / NON / VALIDER */
+.detail{text-align:center}
+.detail .gros{font-size:34px;font-weight:800;margin:6px 0 2px;line-height:1.15;word-break:break-word}
+.detail .salle{font-size:22px;color:var(--soft);margin-bottom:14px}
+.detail .quest{font-size:19px;font-weight:700;margin:6px 0 12px}
+.choix{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.choix button{padding:28px 8px;font-size:34px;font-weight:800;border-width:3px;border-radius:16px}
+.choix .o{border-color:var(--vert);color:var(--vert)} .choix .o.on{background:var(--vert);color:#fff}
+.choix .n{border-color:var(--rouge);color:var(--rouge)} .choix .n.on{background:var(--rouge);color:#fff}
+.sens{min-height:46px;font-size:16px;margin-bottom:12px;font-weight:600}
+.valider{width:100%;padding:18px;font-size:22px;font-weight:800}
+/* partie directeur */
+.login{max-width:420px;margin:30px auto}
+.login h1{font-size:21px;margin:6px 0 12px}
+.marque{color:var(--bleu-fonce);font-weight:800;letter-spacing:.08em;font-size:13px}
+.colonnes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.col{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;min-height:150px}
+.col h3{margin:0 0 4px;font-size:14px;color:var(--bleu-fonce)}
+.cpt{font-size:12px;color:var(--soft);margin-bottom:8px}
+.cpt b.r{color:var(--rouge)}
+.abs{background:var(--rouge-clair);border-left:4px solid var(--rouge);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:14px}
+.abs small{display:block;color:var(--soft);font-size:12px}
+.aucun{color:var(--vert);font-size:13px}
+details summary{cursor:pointer;color:var(--bleu);font-size:12.5px;margin-top:6px}
+details div{font-size:12.5px;color:var(--soft);padding:2px 0}
+table.syn{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
+table.syn th,table.syn td{border:1px solid var(--line);padding:9px 6px;text-align:center;font-size:14px}
+table.syn td.zero{color:var(--soft)} table.syn td.n{background:var(--rouge-clair);color:var(--rouge);font-weight:800;cursor:pointer}
+@media (max-width:760px){ .colonnes{grid-template-columns:1fr 1fr} }
+@media (max-width:480px){ .colonnes{grid-template-columns:1fr} .tuile b{font-size:18px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===================== AGENT ===================== -->
+  <section id="vueAgent">
+    <div class="brand"><h1>Suivi d'absence</h1><small>ISTA Hay Riad</small></div>
+    <div id="agCode" class="carte" style="max-width:380px;margin:30px auto">
+      <label for="codeIn" style="margin-top:0">Code d'accès</label>
+      <input id="codeIn" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="••••">
+      <p class="erreur" id="codeErr" hidden>Code incorrect.</p>
+      <button class="action" id="codeOk" style="width:100%;margin-top:12px;padding:14px">Entrer</button>
+    </div>
+    <div id="agTournee" hidden>
+      <div id="agSemaines" class="chips"></div>
+      <div id="agJours" class="chips"></div>
+      <div id="agCreneaux" class="creneaux"></div>
+      <div id="agSalles" class="salles"></div>
+      <div id="agDetail" class="carte detail" hidden></div>
+    </div>
+  </section>
+
+  <!-- ===================== DIRECTEUR (caché : lien secret) ===================== -->
+  <section id="vueAdmin" hidden>
+    <div id="admGate" class="login carte">
+      <div class="marque">ISTA HAY RIAD</div>
+      <h1>Connectez-vous à votre compte</h1>
+      <label for="admEmail">Adresse e-mail</label>
+      <input id="admEmail" type="email" autocomplete="username" value="achraf.elgharabi@ofppt.ma">
+      <label for="admMdp">Mot de passe</label>
+      <input id="admMdp" type="password" autocomplete="current-password">
+      <p class="erreur" id="admErr" hidden></p>
+      <button class="action" id="admOk" style="width:100%;margin-top:14px;padding:13px">Connexion</button>
+    </div>
+    <div id="admContenu" hidden>
+      <div class="brand"><h1>Suivi d'absence — directeur</h1><button class="lien" id="admOut">se déconnecter</button></div>
+      <div class="carte">
+        <b>Emplois</b> <span id="admEtat" style="color:var(--soft);font-size:14px"></span>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px">
+          <input id="admFichier" type="file" accept=".json,application/json">
+          <button class="action" id="admInjecter">Injecter les emplois</button>
+        </div>
+        <p id="admMsg" style="font-size:14px;margin:8px 0 0"></p>
+      </div>
+      <div id="admSemaines" class="chips"></div>
+      <div id="admJours" class="chips"></div>
+      <div id="admVue"></div>
+    </div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
+<script>
+/* ===================================================================
+   ISTA HAY RIAD — SUIVI D'ABSENCE (nouvelle application, 08/10/2026)
+   - AGENT DE SÉCURITÉ : code d'accès, groupes répartis par salle ; un groupe -> OUI (présent, donc formateur
+     présent) ou NON (absent, donc formateur absent) puis VALIDER.
+   - DIRECTEUR (lien secret, e-mail + mot de passe) : injecte le fichier JSON des emplois, voit en direct les
+     formateurs absents par jour et par créneau.
+   Même projet Firebase que la plateforme ; collection à elle : suivi/…
+     suivi/plan        = en-tête du planning injecté
+     suivi/plan_<w>    = séances de la semaine w
+     suivi/p<w>        = pointage de la semaine w : champ « f<formateur>_<jour>_<créneau> » = {e:'O'|'N', h:'HH:MM'}
+   Mode démonstration (?demo=1) : tout reste dans le navigateur, sans Firebase.
+   =================== */
+const $=id=>document.getElementById(id);
+const DEMO=new URLSearchParams(location.search).get('demo')==='1';
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyCgVQtJdrsIsS2bvpkqZSMH7pPJGm_IlO8", authDomain:"emploi-ista-hay-riad.firebaseapp.com",
+  projectId:"emploi-ista-hay-riad", storageBucket:"emploi-ista-hay-riad.firebasestorage.app",
+  messagingSenderId:"683780273492", appId:"1:683780273492:web:f00ef52a85898b39d504c1"
+};
+const CRENEAUX=['08h00 – 10h30','10h30 – 13h00','13h30 – 16h00','16h00 – 18h30'];
+const BORNES=[[8*60,10*60+30],[10*60+30,13*60],[13*60+30,16*60],[16*60,18*60+30]];
+const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const ADMIN_EMAIL='achraf.elgharabi@ofppt.ma';
+
+/* ---------------- accès aux données : Firestore, ou mémoire en démonstration ---------------- */
+let fs=null, fbAuth=null;
+const ecoutes={};                                   // démonstration : chemin -> [rappels]
+const memLire=p=>{ try{ return JSON.parse(localStorage.getItem('SA_DEMO|'+p)||'null'); }catch(e){ return null; } };
+const memEcrire=(p,o)=>{ localStorage.setItem('SA_DEMO|'+p, JSON.stringify(o)); (ecoutes[p]||[]).forEach(f=>f(o)); };
+const DB={
+  async lire(p){
+    if(DEMO) return memLire(p);
+    const s=await fs.doc(p).get(); if(!s.exists) return null;
+    const o=s.data()||{}; if(typeof o.j==='string'){ try{ return JSON.parse(o.j); }catch(e){ return null; } } return o;
+  },
+  async ecrire(p,obj){ if(DEMO) return memEcrire(p,obj); await fs.doc(p).set({j:JSON.stringify(obj), maj:new Date().toISOString()}); },
+  async fusionner(p,cle,val){                        // une case du pointage, sans toucher aux autres
+    if(DEMO){ const o=memLire(p)||{}; o[cle]=val; return memEcrire(p,o); }
+    await fs.doc(p).set({[cle]:val},{merge:true});
+  },
+  ecouter(p,cb){                                     // renvoie une fonction d'arrêt
+    if(DEMO){ (ecoutes[p]=ecoutes[p]||[]).push(cb); cb(memLire(p)||{}); return ()=>{ ecoutes[p]=(ecoutes[p]||[]).filter(f=>f!==cb); }; }
+    return fs.doc(p).onSnapshot(s=>cb(s.exists?(s.data()||{}):{}), e=>console.error('écoute',e));
+  }
+};
+async function ouvrirFirebase(){
+  if(DEMO) return;
+  try{
+    if(!window.firebase) throw new Error('SDK Firebase non chargé');
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    /* App Check (même clé reCAPTCHA Enterprise que la plateforme) : toute page reliée à ce projet doit l'activer */
+    try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider('6LfMzsctAAAAAMTwTwCqmIC_tlABhvTR1keKY-1I'), true); }catch(e){ console.error('App Check',e); }
+    fs=firebase.firestore(); fbAuth=firebase.auth();
+    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}   // mot de passe redemandé à chaque ouverture
+  }catch(e){ console.error('Firebase',e); fs=null; }
+}
+
+/* ---------------- planning injecté ---------------- */
+let META=null;                  // {lundis, nomAff, F, G, M, S, nb}
+const SEMAINE_CACHE={};
+async function chargerMeta(){ META=await DB.lire('suivi/plan'); return META; }
+async function chargerSemaine(w){
+  if(SEMAINE_CACHE[w]) return SEMAINE_CACHE[w];
+  const d=await DB.lire('suivi/plan_'+w);
+  return (SEMAINE_CACHE[w]=(d&&d.sessions)||[]);
+}
+const salleAff=code=>{ const m=/^S0*(\d+)$/i.exec(String(code||'')); return m?('Salle '+m[1]):(code?('Salle '+code):''); };
+const salleNum=code=>{ const m=/(\d+)/.exec(String(code||'')); return m?+m[1]:999; };
+/* séance du planning -> objet utilisable (FAD exclue : rien à constater physiquement) */
+function lignes(sessions){
+  return sessions.filter(x=>x[3]===0).map(x=>({
+    fi:x[0], jour:x[1], slot:x[2], salle:META.S[x[4]]||'', module:META.M[x[5]]||'',
+    groupes:(x[6]||[]).map(i=>META.G[i]&&META.G[i][0]).filter(Boolean),
+    an:Math.max(0,...(x[6]||[]).map(i=>+((META.G[i]||[])[2])||0)),
+    formateur:(META.nomAff&&META.nomAff[x[0]])||META.F[x[0]]||'?'
+  }));
+}
+const cleP=(fi,j,s)=>'f'+fi+'_'+j+'_'+s;
+const dateCasa=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Casablanca'});     // AAAA-MM-JJ
+const heureCasa=()=>new Date().toLocaleTimeString('fr-FR',{timeZone:'Africa/Casablanca',hour:'2-digit',minute:'2-digit'});
+function semaineEtJourDuJour(){
+  if(!META||!META.lundis||!META.lundis.length) return null;
+  const auj=new Date(dateCasa()+'T00:00:00');
+  for(let w=META.lundis.length-1; w>=0; w--){
+    const diff=Math.round((auj-new Date(META.lundis[w]+'T00:00:00'))/86400000);
+    if(diff>=0 && diff<=5) return {w, jour:diff};
+  }
+  return null;
+}
+function creneauActuel(){
+  const [h,m]=heureCasa().split(':').map(Number), t=h*60+m;
+  for(let i=0;i<BORNES.length;i++) if(t>=BORNES[i][0] && t<=BORNES[i][1]) return i;
+  return -1;
+}
+const dateJour=(w,j)=>{ const d=new Date(META.lundis[w]+'T00:00:00'); d.setDate(d.getDate()+j); return d; };
+const jjmm=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+
+/* ---------------- accès : code agent et lien secret (lus dans Firestore, jamais écrits ici) ---------------- */
+let CODE_AGENT=null, SECRET=null;
+async function chargerAcces(){
+  if(DEMO){ CODE_AGENT='0000'; SECRET='direction-ihr'; return; }
+  try{ const a=await DB.lire('cfg/acces'); CODE_AGENT=(a&&a.code)||null; SECRET=(a&&a.secret)||null; }catch(e){ CODE_AGENT=null; }
+}
+function vue(n){ $('vueAgent').hidden=n!=='Agent'; $('vueAdmin').hidden=n!=='Admin'; }
+function verifierAccesSecret(){
+  const h=decodeURIComponent((location.hash||'').replace(/^#/,''));
+  if(SECRET && h===SECRET){ vue('Admin'); } else { vue('Agent'); }
+}
+window.addEventListener('hashchange',verifierAccesSecret);
+
+/* ====================================================================
+   AGENT
+   ==================================================================== */
+const AG={w:0, jour:0, slot:0, session:null, choix:null, stop:null, pointage:{}, lignes:[]};
+$('codeOk').onclick=entrerAgent; $('codeIn').onkeydown=e=>{ if(e.key==='Enter') entrerAgent(); };
+async function entrerAgent(){
+  if(!CODE_AGENT){ $('codeErr').hidden=false; $('codeErr').textContent='Connexion en cours… réessayez dans un instant.'; return; }
+  if($('codeIn').value.trim()!==String(CODE_AGENT)){ $('codeErr').hidden=false; $('codeErr').textContent='Code incorrect.'; return; }
+  $('codeErr').hidden=true; $('agCode').hidden=true; $('agTournee').hidden=false;
+  await demarrerTournee();
+}
+async function demarrerTournee(){
+  await chargerMeta();
+  if(!META||!META.lundis||!META.lundis.length){ $('agSalles').innerHTML='<p class="vide">Aucun emploi n’a encore été injecté par la direction.</p>'; return; }
+  const auj=semaineEtJourDuJour();
+  AG.w = auj ? auj.w : META.lundis.length-1;
+  AG.jour = auj ? auj.jour : 0;
+  const c=creneauActuel(); AG.slot = c>=0 ? c : 0;
+  renderNavAgent(); await afficherSalles();
+}
+function renderNavAgent(){
+  const auj=semaineEtJourDuJour();
+  $('agSemaines').innerHTML=META.lundis.map((_,w)=>`<button class="chip${w===AG.w?' on':''}${auj&&auj.w===w?' auj':''}" data-w="${w}">S${w+1} · ${jjmm(dateJour(w,0))}</button>`).join('');
+  $('agJours').innerHTML=JOURS.map((j,d)=>`<button class="chip${d===AG.jour?' on':''}${auj&&auj.w===AG.w&&auj.jour===d?' auj':''}" data-j="${d}">${j.slice(0,3)} ${jjmm(dateJour(AG.w,d))}</button>`).join('');
+  $('agCreneaux').innerHTML=CRENEAUX.map((c,i)=>`<button class="${i===AG.slot?'on':''}" data-s="${i}">${c.replace(' – ','<br>')}</button>`).join('');
+  $('agSemaines').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ AG.w=+b.dataset.w; renderNavAgent(); await afficherSalles(); });
+  $('agJours').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ AG.jour=+b.dataset.j; renderNavAgent(); await afficherSalles(); });
+  $('agCreneaux').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ AG.slot=+b.dataset.s; renderNavAgent(); await afficherSalles(); });
+}
+async function afficherSalles(){
+  $('agDetail').hidden=true; $('agSalles').hidden=false;
+  if(AG.stop){ AG.stop(); AG.stop=null; }
+  const sess=await chargerSemaine(AG.w);
+  AG.lignes=lignes(sess).filter(l=>l.jour===AG.jour && l.slot===AG.slot)
+    .sort((a,b)=>b.an-a.an || salleNum(a.salle)-salleNum(b.salle) || a.groupes.join().localeCompare(b.groupes.join()));
+  AG.stop=DB.ecouter('suivi/p'+AG.w, data=>{ AG.pointage=data||{}; dessinerSalles(); });
+}
+function dessinerSalles(){
+  if(!AG.lignes.length){ $('agSalles').innerHTML='<p class="vide" style="grid-column:1/-1">Aucun groupe en présentiel sur ce créneau.</p>'; return; }
+  $('agSalles').innerHTML=AG.lignes.map((l,i)=>{
+    const p=AG.pointage[cleP(l.fi,l.jour,l.slot)];
+    const cls=p?(p.e==='O'?' oui':' non'):'';
+    return `<button class="tuile${cls}" data-i="${i}"><b>${l.groupes.join(', ')}</b><span>${salleAff(l.salle)||'—'}</span></button>`;
+  }).join('');
+  $('agSalles').querySelectorAll('button').forEach(b=>b.onclick=()=>ouvrirDetail(+b.dataset.i));
+}
+function ouvrirDetail(i){
+  const l=AG.lignes[i]; AG.session=l;
+  const p=AG.pointage[cleP(l.fi,l.jour,l.slot)];
+  AG.choix=p?p.e:null;
+  $('agSalles').hidden=true; $('agDetail').hidden=false;
+  $('agDetail').innerHTML=`<div class="gros">${l.groupes.join(', ')}</div><div class="salle">${salleAff(l.salle)||''}</div>
+    <div class="quest">Le groupe est-il présent ?</div>
+    <div class="choix"><button class="o" id="btnOui">OUI</button><button class="n" id="btnNon">NON</button></div>
+    <div class="sens" id="sens"></div>
+    <button class="action valider" id="btnValider" disabled>VALIDER</button>
+    <button class="lien" id="btnRetour" style="margin-top:8px">← retour aux salles</button>`;
+  $('btnOui').onclick=()=>{ AG.choix='O'; majChoix(); };
+  $('btnNon').onclick=()=>{ AG.choix='N'; majChoix(); };
+  $('btnRetour').onclick=()=>{ $('agDetail').hidden=true; $('agSalles').hidden=false; };
+  $('btnValider').onclick=validerChoix;
+  majChoix();
+}
+function majChoix(){
+  $('btnOui').classList.toggle('on',AG.choix==='O'); $('btnNon').classList.toggle('on',AG.choix==='N');
+  $('sens').innerHTML = AG.choix==='O' ? '<span style="color:var(--vert)">Groupe présent — le formateur est donc <b>présent</b>.</span>'
+                      : AG.choix==='N' ? '<span style="color:var(--rouge)">Groupe absent — le formateur est donc <b>absent</b>.</span>' : '';
+  $('btnValider').disabled=!AG.choix;
+}
+async function validerChoix(){
+  const l=AG.session; if(!l||!AG.choix) return;
+  $('btnValider').disabled=true; $('btnValider').textContent='Enregistrement…';
+  try{
+    await DB.fusionner('suivi/p'+AG.w, cleP(l.fi,l.jour,l.slot), {e:AG.choix, h:heureCasa()});
+    $('agDetail').hidden=true; $('agSalles').hidden=false;          // retour à la grille : la tuile change de couleur
+  }catch(e){
+    console.error(e); $('btnValider').textContent='VALIDER';
+    $('sens').innerHTML='<span style="color:var(--rouge)">Enregistrement impossible ('+(e&&e.code||e.message||'erreur')+'). Réessayez.</span>';
+    $('btnValider').disabled=false;
+  }
+}
+
+/* ====================================================================
+   DIRECTEUR
+   ==================================================================== */
+const AD={w:0, jour:-1, stop:null, pointage:{}};         // jour -1 = synthèse de la semaine
+$('admOk').onclick=async()=>{
+  $('admErr').hidden=true;
+  try{
+    if(DEMO){ if($('admMdp').value!=='demo') throw new Error('mot de passe de démonstration : demo'); }
+    else await fbAuth.signInWithEmailAndPassword($('admEmail').value.trim(), $('admMdp').value);
+    $('admGate').hidden=true; $('admContenu').hidden=false; $('admMdp').value='';
+    await demarrerAdmin();
+  }catch(e){ $('admErr').hidden=false; $('admErr').textContent='Connexion refusée : '+(e&&e.message||'erreur'); }
+};
+$('admMdp').onkeydown=e=>{ if(e.key==='Enter') $('admOk').click(); };
+$('admOut').onclick=async()=>{ try{ if(!DEMO) await fbAuth.signOut(); }catch(e){} if(AD.stop){ AD.stop(); AD.stop=null; } $('admContenu').hidden=true; $('admGate').hidden=false; };
+async function demarrerAdmin(){
+  await chargerMeta();
+  if(!META||!META.lundis||!META.lundis.length){ $('admEtat').textContent='— aucun emploi injecté'; $('admSemaines').innerHTML=''; $('admJours').innerHTML=''; $('admVue').innerHTML='<p class="vide">Injectez le fichier JSON des emplois (exporté du générateur : « Exporter pour la plateforme »).</p>'; return; }
+  $('admEtat').textContent='— '+META.lundis.length+' semaine'+(META.lundis.length>1?'s':'')+' (S1 à S'+META.lundis.length+'), injectés le '+String(META.injecte||'').slice(0,10).split('-').reverse().join('/');
+  const auj=semaineEtJourDuJour();
+  AD.w = auj ? auj.w : META.lundis.length-1; AD.jour = auj ? auj.jour : -1;
+  renderNavAdmin(); ecouterAdmin();
+}
+function renderNavAdmin(){
+  const auj=semaineEtJourDuJour();
+  $('admSemaines').innerHTML=META.lundis.map((_,w)=>`<button class="chip${w===AD.w?' on':''}${auj&&auj.w===w?' auj':''}" data-w="${w}">S${w+1} · ${jjmm(dateJour(w,0))}</button>`).join('');
+  $('admJours').innerHTML=`<button class="chip${AD.jour===-1?' on':''}" data-j="-1">Semaine</button>`+JOURS.map((j,d)=>`<button class="chip${d===AD.jour?' on':''}${auj&&auj.w===AD.w&&auj.jour===d?' auj':''}" data-j="${d}">${j.slice(0,3)} ${jjmm(dateJour(AD.w,d))}</button>`).join('');
+  $('admSemaines').querySelectorAll('button').forEach(b=>b.onclick=()=>{ AD.w=+b.dataset.w; renderNavAdmin(); ecouterAdmin(); });
+  $('admJours').querySelectorAll('button').forEach(b=>b.onclick=()=>{ AD.jour=+b.dataset.j; renderNavAdmin(); dessinerAdmin(); });
+}
+async function ecouterAdmin(){
+  if(AD.stop){ AD.stop(); AD.stop=null; }
+  AD.sessions=lignes(await chargerSemaine(AD.w));
+  AD.stop=DB.ecouter('suivi/p'+AD.w, data=>{ AD.pointage=data||{}; dessinerAdmin(); });       // DYNAMIQUE : se redessine à chaque pointage de l'agent
+}
+const etatDe=l=>{ const p=AD.pointage[cleP(l.fi,l.jour,l.slot)]; return p?p.e:null; };
+function dessinerAdmin(){
+  if(!AD.sessions) return;
+  if(AD.jour===-1) return dessinerSynthese();
+  const colonnes=CRENEAUX.map((c,s)=>{
+    const L=AD.sessions.filter(l=>l.jour===AD.jour && l.slot===s);
+    const abs=L.filter(l=>etatDe(l)==='N').sort((a,b)=>a.formateur.localeCompare(b.formateur));
+    const pres=L.filter(l=>etatDe(l)==='O'), att=L.filter(l=>!etatDe(l));
+    return `<div class="col"><h3>${c}</h3>
+      <div class="cpt"><b class="r">${abs.length} absent${abs.length>1?'s':''}</b> · ${pres.length} présent${pres.length>1?'s':''} · ${att.length} à pointer</div>
+      ${abs.length?abs.map(l=>`<div class="abs"><b>${l.formateur}</b><small>${l.groupes.join(', ')} · ${salleAff(l.salle)}${AD.pointage[cleP(l.fi,l.jour,l.slot)].h?' · '+AD.pointage[cleP(l.fi,l.jour,l.slot)].h:''}</small></div>`).join('')
+        : (L.length?'<div class="aucun">'+(att.length?'Aucun absent pour le moment':'✓ Tous présents')+'</div>':'<div class="aucun" style="color:var(--soft)">Aucun cours</div>')}
+      ${pres.length?`<details><summary>Présents (${pres.length})</summary>${pres.sort((a,b)=>a.formateur.localeCompare(b.formateur)).map(l=>`<div>${l.formateur} · ${l.groupes.join(', ')}</div>`).join('')}</details>`:''}
+      ${att.length?`<details><summary>Pas encore pointés (${att.length})</summary>${att.sort((a,b)=>a.formateur.localeCompare(b.formateur)).map(l=>`<div>${l.formateur} · ${l.groupes.join(', ')} · ${salleAff(l.salle)}</div>`).join('')}</details>`:''}
+    </div>`; });
+  $('admVue').innerHTML=`<h2 style="font-size:17px;margin:6px 0 10px">${JOURS[AD.jour]} ${dateJour(AD.w,AD.jour).toLocaleDateString('fr-FR',{day:'numeric',month:'long'})} — formateurs absents</h2><div class="colonnes">${colonnes.join('')}</div>`;
+}
+function dessinerSynthese(){
+  const nAbs=(j,s)=>AD.sessions.filter(l=>l.jour===j&&l.slot===s&&etatDe(l)==='N').length;
+  const parF={}; AD.sessions.filter(l=>etatDe(l)==='N').forEach(l=>{ parF[l.formateur]=(parF[l.formateur]||0)+1; });
+  const tot=Object.values(parF).reduce((a,b)=>a+b,0);
+  $('admVue').innerHTML=`<h2 style="font-size:17px;margin:6px 0 10px">Semaine S${AD.w+1} — créneaux avec formateur absent</h2>
+    <table class="syn"><tr><th></th>${CRENEAUX.map(c=>`<th>${c}</th>`).join('')}</tr>
+    ${JOURS.map((j,d)=>`<tr><th>${j} ${jjmm(dateJour(AD.w,d))}</th>${CRENEAUX.map((_,s)=>{ const n=nAbs(d,s); return n?`<td class="n" data-j="${d}">${n}</td>`:`<td class="zero">0</td>`; }).join('')}</tr>`).join('')}</table>
+    <h2 style="font-size:16px;margin:16px 0 8px">Absences par formateur (${tot} créneau${tot>1?'x':''} cette semaine)</h2>
+    ${tot?Object.entries(parF).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([f,n])=>`<div class="abs"><b>${f}</b><small>${n} créneau${n>1?'x':''} absent${n>1?'s':''} ≈ ${String(n*2.5).replace('.',',')} h</small></div>`).join(''):'<p class="aucun">Aucune absence de formateur relevée cette semaine.</p>'}`;
+  $('admVue').querySelectorAll('td.n').forEach(td=>td.onclick=()=>{ AD.jour=+td.dataset.j; renderNavAdmin(); dessinerAdmin(); });
+}
+/* ----- injection du fichier JSON des emplois (exporté par le générateur : « Exporter pour la plateforme ») ----- */
+$('admInjecter').onclick=async()=>{
+  const f=$('admFichier').files&&$('admFichier').files[0]; const msg=$('admMsg');
+  if(!f){ msg.className='erreur'; msg.textContent='Choisissez d’abord le fichier JSON des emplois.'; return; }
+  try{
+    const o=JSON.parse(await f.text());
+    if(!o.semaines || !o.F || !o.G || !o.lundis) throw new Error('ce fichier n’est pas un export d’emplois (il manque semaines, formateurs, groupes ou dates)');
+    const n=o.semaines.length; if(!n) throw new Error('aucune semaine dans ce fichier');
+    msg.className='ok'; msg.textContent='Injection en cours…';
+    for(let w=0; w<n; w++){
+      await DB.ecrire('suivi/plan_'+w, {sessions:o.semaines[w]});
+      msg.textContent='Injection en cours… semaine '+(w+1)+' / '+n;
+    }
+    await DB.ecrire('suivi/plan', {lundis:o.lundis, dates:o.dates||[], F:o.F, nomAff:o.nomAff||o.F, G:o.G, M:o.M||[], S:o.S||[], nb:n, injecte:new Date().toISOString()});
+    Object.keys(SEMAINE_CACHE).forEach(k=>delete SEMAINE_CACHE[k]);
+    msg.className='ok'; msg.textContent='✓ '+n+' semaine'+(n>1?'s':'')+' injectée'+(n>1?'s':'')+' ('+o.F.length+' formateurs, '+o.G.length+' groupes). L’agent les voit tout de suite.';
+    await demarrerAdmin();
+  }catch(e){ msg.className='erreur'; msg.textContent='Injection impossible : '+(e&&e.message||e); }
+};
+
+/* ---------------- démarrage ---------------- */
+(async()=>{
+  await ouvrirFirebase();
+  await chargerAcces();
+  verifierAccesSecret();
+})();
+</script>
+</body>
+</html>
