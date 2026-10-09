@@ -237,6 +237,19 @@ function verifierAccesSecret(){
   if(SECRET && h===SECRET){ vue('Admin'); } else { vue('Agent'); }
 }
 window.addEventListener('hashchange',verifierAccesSecret);
+/* ACCÈS DIRECTEUR DEPUIS L'APPLICATION INSTALLÉE (09/10/2026) : une fois empaquetée en .apk (PWABuilder), il n'y a
+   plus de barre d'adresse pour taper le lien secret #direction-ihr — un seul geste discret (2 appuis rapprochés sur
+   le titre « Suivi d'absence ») y mène depuis l'écran agent, sans rien montrer d'autre à l'écran. Toujours protégé
+   ensuite par le mot de passe du compte Firebase du directeur. */
+(function(){
+  let n=0, t=null;
+  const titre=document.querySelector('#vueAgent .brand h1');
+  if(!titre) return;
+  titre.addEventListener('click', ()=>{
+    n++; clearTimeout(t); t=setTimeout(()=>{ n=0; }, 2000);
+    if(n>=2){ n=0; if(SECRET) location.hash=SECRET; }
+  });
+})();
 
 /* ====================================================================
    AGENT
