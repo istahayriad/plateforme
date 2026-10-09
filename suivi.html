@@ -300,8 +300,8 @@ function ouvrirDetail(i){
 }
 function majChoix(){
   $('btnOui').classList.toggle('on',AG.choix==='O'); $('btnNon').classList.toggle('on',AG.choix==='N');
-  $('sens').innerHTML = AG.choix==='O' ? '<span style="color:var(--vert)">Groupe présent — le formateur est donc <b>présent</b>.</span>'
-                      : AG.choix==='N' ? '<span style="color:var(--rouge)">Groupe absent — le formateur est donc <b>absent</b>.</span>' : '';
+  $('sens').innerHTML = AG.choix==='O' ? '<span style="color:var(--vert)">Groupe présent.</span>'
+                      : AG.choix==='N' ? '<span style="color:var(--rouge)">Groupe absent.</span>' : '';
   $('btnValider').disabled=!AG.choix;
 }
 async function validerChoix(){
