@@ -75,34 +75,34 @@ header{position:sticky;top:0;z-index:30;background:var(--bleu-fonce);color:#fff;
   display:grid;place-items:center;color:var(--bleu);font-size:15px;flex:none}
 .fleche:disabled{opacity:.35}
 
-/* ---------- grille d'emploi ---------- */
-.card{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);overflow:hidden;margin-bottom:12px}
-.cardTete{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;
-  align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.cardTete b{font-size:15.5px}
-.cardTete span{font-size:12.5px;color:var(--soft)}
-.jour{border-bottom:1px solid var(--line)}
-.jour:last-child{border-bottom:0}
-.jourTete{padding:8px 15px;background:var(--bleu-pale);font-size:11.5px;font-weight:800;
-  letter-spacing:.09em;text-transform:uppercase;color:var(--bleu-fonce)}
-.cases{display:grid;grid-template-columns:1fr;gap:1px;background:var(--line)}
-.case{background:var(--blanc);padding:10px 15px;min-height:46px;display:flex;gap:10px;align-items:flex-start}
-.caseH{flex:0 0 76px;font-size:11px;font-weight:700;color:var(--faible);padding-top:2px;
+/* ---------- emploi du temps : MÊME PRÉSENTATION que « Emplois ISTA Hay Riad » (10/10/2026, demande) :
+   une carte par jour, l'horaire à gauche, et chaque séance en carte à liseré coloré —
+   vert = présentiel, bleu = distanciel ; groupe (ou module) en gras, module (ou formateur) en dessous,
+   salle en pastille. Seule la page de consultation existante fait foi pour cet aspect. ---------- */
+.enTete{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:4px 2px 10px}
+.enTete b{font-size:16px}
+.enTete span{font-size:11.5px;color:var(--soft);font-variant-numeric:tabular-nums}
+.jr{border:1px solid var(--line);border-radius:12px;background:var(--blanc);
+  padding:10px 12px;margin-bottom:8px;box-shadow:var(--ombre)}
+.jr h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between;align-items:baseline}
+.jr h4 em{font-style:normal;font-size:10.5px;color:var(--soft);font-weight:500;
   font-variant-numeric:tabular-nums}
-.caseC{flex:1;min-width:0}
-.caseC b{display:block;font-size:14px;font-weight:700}
-.caseC small{display:block;font-size:12px;color:var(--soft);margin-top:1px}
-.pastille{display:inline-block;margin-top:3px;padding:2px 8px;border-radius:7px;font-size:11px;
-  font-weight:700;background:var(--bleu-clair);color:var(--bleu-fonce)}
-.pastille.fad{background:var(--ambre-clair);color:var(--ambre)}
-.vide{color:var(--faible);font-size:12.5px;font-style:italic;padding-top:2px}
-.rienJour{display:none;background:var(--blanc);padding:10px 15px;color:var(--faible);
-  font-size:12.5px;font-style:italic}
-/* PAGE CONÇUE POUR LE TÉLÉPHONE UNIQUEMENT (10/10/2026, demande) : une seule colonne, on n'affiche que les
-   séances réelles — une grille aux trois quarts vide se ferait défiler pour rien. Sur un grand écran, la
-   même colonne reste centrée, comme dans l'application. */
-.case.libre{display:none}
-.jour.sansCours .rienJour{display:block}
+.cr{display:flex;gap:10px;padding:7px 0;border-top:1px dotted var(--line)}
+.cr:first-of-type{border-top:none}
+.hh{font-size:10.5px;color:var(--soft);white-space:nowrap;padding-top:3px;width:82px;flex:none;
+  font-variant-numeric:tabular-nums}
+.cc{min-width:0;flex:1}
+.rien{margin:0;font-size:12px;color:var(--faible)}
+.seance{display:block;padding:7px 9px 8px 11px;position:relative}
+.seance::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px;
+  background:var(--vert)}
+.seance.fad::before{background:var(--bleu)}
+.seance + .seance{border-top:1px solid var(--line);margin-top:4px;padding-top:9px}
+.seance .qui{display:block;font-weight:700;font-size:12.5px;line-height:1.2;color:var(--ink)}
+.seance .quoi{display:block;font-size:10.5px;line-height:1.3;color:var(--soft);margin-top:2px}
+.seance .ou{display:inline-block;margin-top:5px;font-size:9.5px;font-weight:700;letter-spacing:.05em;
+  padding:2px 7px;border-radius:6px;background:var(--vert-clair);color:var(--vert)}
+.seance.fad .ou{background:var(--bleu-clair);color:var(--bleu)}
 
 /* ---------- absences ---------- */
 .slotCard{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);padding:13px 15px;margin-bottom:10px}
@@ -261,9 +261,20 @@ async function ouvrirFirebase(){
 /* ---------------- état ---------------- */
 let META=null;
 const CACHE={};                                    // semaine -> séances
-const ET={ tab:'form', w:0, jour:0, f:0, g:0, stop:null, pointage:{} };
+/* f et g à null tant que rien n'a été choisi : la première ouverture suit l'ordre d'affichage
+   (formateurs par ordre alphabétique, groupes 3ᵉ année d'abord) et non l'ordre du fichier */
+const ET={ tab:'form', w:0, jour:0, f:null, g:null, stop:null, pointage:{} };
 
 const dateCasa=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Casablanca'});
+/* UNE SALLE, UNE SEULE ÉCRITURE (10/10/2026) : selon leur origine (base, emploi importé, saisie à la main)
+   les séances portent « S03 », « S3 » ou « 3 » — trois écritures de la MÊME salle. Sans les ramener à une
+   forme unique, la liste des salles comptait deux fois la même (31 libres affichés au lieu de 4). */
+const canonSalle=c=>{
+  const s=String(c==null?'':c).trim().toUpperCase();
+  if(!s || s==='FAD') return '';
+  const m=/^S?0*(\d+)$/.exec(s);
+  return m ? 'S'+m[1].padStart(2,'0') : s;
+};
 const salleAff=c=>{ const m=/^S0*(\d+)$/i.exec(String(c||'')); return m?m[1]:(c||''); };
 const salleNum=c=>{ const m=/(\d+)/.exec(String(c||'')); return m?+m[1]:999; };
 const jjmm=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
@@ -288,8 +299,9 @@ function lire(sessions){
 /* toutes les salles connues : la liste de l'établissement si elle a été exportée, sinon celles vues au planning */
 function toutesSalles(){
   const l=(META&&Array.isArray(META.salles)&&META.salles.length) ? META.salles
-        : ((META&&META.S)||[]).filter(Boolean);
-  return [...new Set(l)].filter(s=>s && s!=='FAD').sort((a,b)=>salleNum(a)-salleNum(b)||String(a).localeCompare(b));
+        : ((META&&META.S)||[]);
+  return [...new Set(l.map(canonSalle).filter(Boolean))]
+    .sort((a,b)=>salleNum(a)-salleNum(b)||String(a).localeCompare(b));
 }
 /* semaine et jour d'aujourd'hui, d'après les lundis du planning */
 function aujourdhui(){
@@ -385,20 +397,23 @@ async function rendre(){
   if(ET.tab==='salles') return vueSalles(sessions);
 }
 
-/* ---------- grille commune (emploi d'une semaine) ---------- */
+/* ---------- emploi d'une semaine, jour par jour (présentation de « Emplois ISTA Hay Riad ») ---------- */
+function seanceHtml(x, qui, quoi){
+  const ou = x.fad ? 'À distance' : (x.salle ? 'Salle '+salleAff(x.salle) : 'Salle à affecter');
+  return `<span class="seance${x.fad?' fad':''}"><span class="qui">${esc(qui)}</span>`
+       + `<span class="quoi">${esc(quoi)}</span><span class="ou">${esc(ou)}</span></span>`;
+}
 function grilleHtml(sessions, cellule){
   let h='';
   for(let j=0;j<6;j++){
-    const duJour=sessions.filter(x=>x.jour===j);
-    h+=`<div class="jour${duJour.length?'':' sansCours'}"><div class="jourTete">${JOURS[j]} ${jjmm(dateJour(ET.w,j))}</div>`
-      +`<div class="rienJour">Aucune séance ce jour-là.</div><div class="cases">`;
-    for(let s=0;s<4;s++){
-      const ici=duJour.filter(x=>x.slot===s);
-      h+=`<div class="case${ici.length?'':' libre'}"><div class="caseH">${CR_COURT[s]}</div><div class="caseC">`
-        + (ici.length ? ici.map(cellule).join('<div style="height:7px"></div>') : '<div class="vide">—</div>')
-        + `</div></div>`;
-    }
-    h+='</div></div>';
+    const duJour=sessions.filter(x=>x.jour===j).sort((a,b)=>a.slot-b.slot);
+    h+=`<div class="jr"><h4>${JOURS[j]} ${jjmm(dateJour(ET.w,j))}<em>`
+      + (duJour.length ? duJour.length+' séance'+(duJour.length>1?'s':'')+' · '+h1(duJour.length*DUREE)+' h' : 'libre')
+      + `</em></h4>`;
+    h+= duJour.length
+      ? duJour.map(x=>`<div class="cr"><span class="hh">${CRENEAUX[x.slot]}</span><div class="cc">${cellule(x)}</div></div>`).join('')
+      : '<p class="rien">aucune séance</p>';
+    h+='</div>';
   }
   return h;
 }
@@ -410,7 +425,7 @@ function vueFormateurs(sessions){
   const noms=(META.nomAff||META.F||[]);
   const ordre=noms.map((n,i)=>({i,n})).sort((a,b)=>String(a.n).localeCompare(String(b.n),'fr'));
   if(!ordre.length){ $('contenu').innerHTML='<div class="message">Aucun formateur dans ce planning.</div>'; return; }
-  if(!ordre.some(o=>o.i===ET.f)) ET.f=ordre[0].i;
+  if(ET.f==null || !ordre.some(o=>o.i===ET.f)) ET.f=ordre[0].i;
   const pos=ordre.findIndex(o=>o.i===ET.f);
   const mien=sessions.filter(x=>x.fi===ET.f);
   const nbP=mien.filter(x=>!x.fad).length, nbF=mien.length-nbP;
@@ -421,13 +436,9 @@ function vueFormateurs(sessions){
       <select id="sel">${ordre.map(o=>`<option value="${o.i}"${o.i===ET.f?' selected':''}>${esc(o.n)}</option>`).join('')}</select>
       <button class="fleche" id="suiv" ${pos>=ordre.length-1?'disabled':''}>▶</button>
     </div>
-    <div class="card">
-      <div class="cardTete"><b>${esc(noms[ET.f]||'')}</b>
-        <span>${mien.length} séance${mien.length>1?'s':''} · ${h1(mien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
-      ${grilleHtml(mien, x=>`<b>${esc(x.groupes.join(', ')||'—')}</b>`
-        +`<small>${esc(x.module||'')}</small>`
-        +`<span class="pastille${x.fad?' fad':''}">${x.fad?'À distance':'Salle '+esc(salleAff(x.salle)||'?')}</span>`)}
-    </div>`;
+    <div class="enTete"><b>${esc(noms[ET.f]||'')}</b>
+      <span>S${ET.w+1} · ${mien.length} séance${mien.length>1?'s':''} · ${h1(mien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
+    ${grilleHtml(mien, x=>seanceHtml(x, x.groupes.join(' · ')||'—', x.module||''))}`;
   $('sel').onchange=e=>{ ET.f=+e.target.value; rendre(); };
   $('prec').onclick=()=>{ ET.f=ordre[Math.max(0,pos-1)].i; rendre(); };
   $('suiv').onclick=()=>{ ET.f=ordre[Math.min(ordre.length-1,pos+1)].i; rendre(); };
@@ -442,7 +453,7 @@ function vueGroupes(sessions){
   const ordre=G.map((g,i)=>({i, code:(g&&g[0])||'', an:+((g&&g[2])||0)}))
     .filter(o=>o.code).sort((a,b)=>b.an-a.an || a.code.localeCompare(b.code,'fr'));
   if(!ordre.length){ $('contenu').innerHTML='<div class="message">Aucun groupe dans ce planning.</div>'; return; }
-  if(!ordre.some(o=>o.i===ET.g)) ET.g=ordre[0].i;
+  if(ET.g==null || !ordre.some(o=>o.i===ET.g)) ET.g=ordre[0].i;
   const pos=ordre.findIndex(o=>o.i===ET.g);
   const sien=sessions.filter(x=>x.gi.includes(ET.g));
   const nbF=sien.filter(x=>x.fad).length;
@@ -453,13 +464,9 @@ function vueGroupes(sessions){
       <select id="sel">${ordre.map(o=>`<option value="${o.i}"${o.i===ET.g?' selected':''}>${esc(o.code)}${o.an?' · '+o.an+'ᵉ année':''}</option>`).join('')}</select>
       <button class="fleche" id="suiv" ${pos>=ordre.length-1?'disabled':''}>▶</button>
     </div>
-    <div class="card">
-      <div class="cardTete"><b>${esc((G[ET.g]||[])[0]||'')}</b>
-        <span>${sien.length} séance${sien.length>1?'s':''} · ${h1(sien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
-      ${grilleHtml(sien, x=>`<b>${esc(x.module||'—')}</b>`
-        +`<small>${esc(x.formateur)}</small>`
-        +`<span class="pastille${x.fad?' fad':''}">${x.fad?'À distance':'Salle '+esc(salleAff(x.salle)||'?')}</span>`)}
-    </div>`;
+    <div class="enTete"><b>${esc((G[ET.g]||[])[0]||'')}${(G[ET.g]||[])[1]?' — '+esc(G[ET.g][1]):''}</b>
+      <span>S${ET.w+1} · ${sien.length} séance${sien.length>1?'s':''} · ${h1(sien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
+    ${grilleHtml(sien, x=>seanceHtml(x, x.formateur, x.module||''))}`;
   $('sel').onchange=e=>{ ET.g=+e.target.value; rendre(); };
   $('prec').onclick=()=>{ ET.g=ordre[Math.max(0,pos-1)].i; rendre(); };
   $('suiv').onclick=()=>{ ET.g=ordre[Math.min(ordre.length-1,pos+1)].i; rendre(); };
@@ -539,9 +546,10 @@ function syntheseAbs(pres){
    4. SALLES DISPONIBLES
    =================================================================== */
 function vueSalles(sessions){
-  const pres=sessions.filter(x=>!x.fad && x.salle);
+  const pres=sessions.filter(x=>!x.fad && canonSalle(x.salle));
   const salles=toutesSalles();
-  const prises=(j,s)=>new Set(pres.filter(x=>x.jour===j && x.slot===s).map(x=>x.salle));
+  /* même écriture des deux côtés, sinon une salle occupée passerait pour libre */
+  const prises=(j,s)=>new Set(pres.filter(x=>x.jour===j && x.slot===s).map(x=>canonSalle(x.salle)));
   const dessiner=()=>{
     const a=aujourdhui();
     const chips=`<div class="chips" id="jours">
@@ -575,7 +583,7 @@ function vueSalles(sessions){
                           : `<div class="aucun" style="color:var(--rouge)">Aucune salle libre sur ce créneau.</div>`}
           ${pr.size ? `<details><summary>Salles occupées (${pr.size})</summary><ul>${
               [...pr].sort((a,b)=>salleNum(a)-salleNum(b)).map(r=>{
-                const q=pres.find(x=>x.jour===ET.jour && x.slot===s && x.salle===r);
+                const q=pres.find(x=>x.jour===ET.jour && x.slot===s && canonSalle(x.salle)===r);
                 return `<li>Salle ${esc(salleAff(r))} — ${esc(q?q.formateur:'')}${q&&q.groupes.length?' · '+esc(q.groupes.join(', ')):''}</li>`;
               }).join('')}</ul></details>` : ''}
         </div>`;
