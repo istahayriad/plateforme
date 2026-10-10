@@ -152,8 +152,21 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--soft)}
 </head>
 <body>
 
+<!-- ===================== VERROU PAR EMPREINTE ===================== -->
+<section id="vueVerrou" hidden>
+  <div class="login" style="text-align:center">
+    <div class="marque">ISTA Hay Riad</div>
+    <h1 style="margin-bottom:6px">Espace direction</h1>
+    <p style="font-size:13px;color:var(--soft);margin:0 0 22px">Application verrouillée</p>
+    <div style="font-size:52px;line-height:1;margin-bottom:14px">⊙</div>
+    <button class="action" id="btnEmpreinte">Déverrouiller avec l'empreinte</button>
+    <p class="erreur" id="verrouErr" hidden></p>
+    <button class="lienmini" id="btnMdpPlutot" style="margin-top:14px">Utiliser le mot de passe</button>
+  </div>
+</section>
+
 <!-- ===================== CONNEXION ===================== -->
-<section id="vueLogin">
+<section id="vueLogin" hidden>
   <div class="login">
     <div class="marque">ISTA Hay Riad</div>
     <h1>Espace direction</h1>
@@ -183,6 +196,14 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--soft)}
   </header>
 
   <div class="wrap">
+    <div class="outils" id="panBio" hidden>
+      <h3>Déverrouillage par empreinte</h3>
+      <p id="bioTexte">—</p>
+      <button class="action" id="btnBioActiver">Activer l'empreinte</button>
+      <button class="lienmini" id="btnBioPlusTard" style="margin-top:8px">Plus tard</button>
+      <p id="bioMsg" style="font-size:13px;margin:8px 0 0"></p>
+    </div>
+
     <div class="outils" id="panOutils" hidden>
       <h3>Emplois du temps</h3>
       <p id="etatPlan">—</p>
@@ -254,8 +275,56 @@ async function ouvrirFirebase(){
     /* App Check : toute page reliée à ce projet doit l'activer, sinon Firestore refuse (règle du 21/09/2026) */
     try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider('6LfMzsctAAAAAMTwTwCqmIC_tlABhvTR1keKY-1I'), true); }catch(e){ console.error('App Check',e); }
     fs=firebase.firestore(); fbAuth=firebase.auth();
-    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+    /* SESSION GARDÉE SUR L'APPAREIL (10/10/2026, décision de l'utilisateur) : le mot de passe n'est saisi
+       qu'une fois, l'ouverture suivante se fait par EMPREINTE (voir plus bas). Remplace la règle du 18/09
+       « mot de passe redemandé à chaque ouverture » pour cette application seulement. */
+    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
   }catch(e){ console.error('Firebase',e); fs=null; }
+}
+
+/* ===================================================================
+   DÉVERROUILLAGE PAR EMPREINTE (WebAuthn, capteur du téléphone)
+   C'est un VERROU LOCAL : il empêche d'ouvrir l'application sur ce téléphone. Il ne remplace pas le mot de
+   passe du compte (qui reste demandé la première fois, et après une déconnexion).
+   =================================================================== */
+const BIO_CLE='DIR_EMPREINTE';
+const b64u={
+  vers:b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),
+  de:s=>{ const t=s.replace(/-/g,'+').replace(/_/g,'/'); const b=atob(t);
+          return Uint8Array.from(b, c=>c.charCodeAt(0)); }
+};
+const bioId=()=>{ try{ return localStorage.getItem(BIO_CLE)||''; }catch(e){ return ''; } };
+const bioActive=()=>!!bioId();
+async function bioDisponible(){
+  try{
+    if(!window.PublicKeyCredential || !navigator.credentials) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  }catch(e){ return false; }
+}
+async function bioEnregistrer(nom){
+  const chal=crypto.getRandomValues(new Uint8Array(32));
+  const uid=crypto.getRandomValues(new Uint8Array(16));
+  const c=await navigator.credentials.create({publicKey:{
+    challenge:chal,
+    rp:{name:"ISTA Hay Riad — Direction"},
+    user:{id:uid, name:nom||'direction', displayName:nom||'Direction'},
+    pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required'},
+    timeout:60000, attestation:'none'
+  }});
+  if(!c) throw new Error('aucune empreinte enregistrée');
+  localStorage.setItem(BIO_CLE, b64u.vers(c.rawId));
+}
+async function bioVerifier(){
+  const id=bioId(); if(!id) throw new Error('aucune empreinte enregistrée sur cet appareil');
+  const chal=crypto.getRandomValues(new Uint8Array(32));
+  const a=await navigator.credentials.get({publicKey:{
+    challenge:chal,
+    allowCredentials:[{type:'public-key', id:b64u.de(id)}],
+    userVerification:'required', timeout:60000
+  }});
+  if(!a) throw new Error('empreinte non reconnue');
+  return true;
 }
 
 /* ---------------- état ---------------- */
@@ -322,6 +391,25 @@ $('voirMdp').onclick=()=>{ const i=$('mdp');
   const v=i.type==='password'; i.type=v?'text':'password';
   $('voirMdp').textContent=v?'Masquer le mot de passe':'Afficher le mot de passe'; };
 $('mdp').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnLog').click(); });
+/* un seul écran à la fois */
+function ecran(n){
+  $('vueVerrou').hidden = n!=='verrou';
+  $('vueLogin').hidden  = n!=='login';
+  $('vueApp').hidden    = n!=='app';
+}
+/* après une connexion réussie : on ouvre l'application et, si le téléphone sait lire une empreinte
+   et qu'elle n'est pas encore enregistrée, on la propose une fois. */
+async function ouvrirApplication(){
+  ecran('app');
+  await demarrer();
+  try{
+    if(!bioActive() && await bioDisponible() && !sessionStorage.getItem('BIO_PLUS_TARD')){
+      $('bioTexte').textContent="Ouvrez l'application avec votre empreinte au lieu du mot de passe. "
+        +"Le mot de passe restera possible à tout moment.";
+      $('panBio').hidden=false;
+    }
+  }catch(e){}
+}
 $('btnLog').onclick=async()=>{
   const b=$('btnLog'), err=$('logErr');
   err.hidden=true; b.disabled=true; b.textContent='Connexion…';
@@ -329,8 +417,7 @@ $('btnLog').onclick=async()=>{
     if(DEMO){ if($('mdp').value!=='demo') throw new Error('mot de passe de démonstration : demo'); }
     else await fbAuth.signInWithEmailAndPassword($('email').value.trim(), $('mdp').value);
     $('mdp').value='';
-    $('vueLogin').hidden=true; $('vueApp').hidden=false;
-    await demarrer();
+    await ouvrirApplication();
   }catch(e){
     err.hidden=false;
     err.textContent = /password|credential|invalid/i.test(e&&e.code||'')
@@ -339,10 +426,46 @@ $('btnLog').onclick=async()=>{
 };
 $('btnSortir').onclick=async()=>{
   try{ if(!DEMO && fbAuth) await fbAuth.signOut(); }catch(e){}
+  try{ localStorage.removeItem(BIO_CLE); }catch(e){}     // se déconnecter retire aussi l'empreinte
   if(ET.stop){ ET.stop(); ET.stop=null; }
-  $('vueApp').hidden=true; $('vueLogin').hidden=false; $('panOutils').hidden=true;
+  $('panOutils').hidden=true; $('panBio').hidden=true;
+  ecran('login');
 };
 $('btnOutils').onclick=()=>{ $('panOutils').hidden=!$('panOutils').hidden; };
+
+/* ---- proposition d'activation (après la première connexion) ---- */
+$('btnBioActiver').onclick=async()=>{
+  const b=$('btnBioActiver'), m=$('bioMsg');
+  b.disabled=true; m.className=''; m.textContent='Posez votre doigt sur le capteur…';
+  try{
+    await bioEnregistrer(DEMO?'demo':($('email').value||'direction'));
+    m.className='ok'; m.textContent='✓ Empreinte activée. À la prochaine ouverture, elle suffira.';
+    setTimeout(()=>{ $('panBio').hidden=true; }, 1800);
+  }catch(e){
+    m.className='erreur';
+    m.textContent='Activation impossible : '+((e&&e.name==='NotAllowedError') ? 'opération annulée ou refusée par le téléphone.' : (e&&e.message||e));
+  }finally{ b.disabled=false; }
+};
+$('btnBioPlusTard').onclick=()=>{ try{ sessionStorage.setItem('BIO_PLUS_TARD','1'); }catch(e){} $('panBio').hidden=true; };
+
+/* ---- écran de verrou ---- */
+$('btnEmpreinte').onclick=async()=>{
+  const b=$('btnEmpreinte'), err=$('verrouErr');
+  err.hidden=true; b.disabled=true; b.textContent='Posez votre doigt…';
+  try{
+    await bioVerifier();
+    await ouvrirApplication();
+  }catch(e){
+    err.hidden=false;
+    err.textContent = (e&&e.name==='NotAllowedError') ? 'Empreinte non reconnue, ou opération annulée.'
+                                                      : ('Déverrouillage impossible : '+(e&&e.message||e));
+  }finally{ b.disabled=false; b.textContent="Déverrouiller avec l'empreinte"; }
+};
+$('btnMdpPlutot').onclick=async()=>{
+  try{ if(!DEMO && fbAuth) await fbAuth.signOut(); }catch(e){}
+  try{ localStorage.removeItem(BIO_CLE); }catch(e){}
+  ecran('login');
+};
 
 /* ===================================================================
    DÉMARRAGE
@@ -619,8 +742,23 @@ $('btnInjecter').onclick=async()=>{
   }catch(e){ msg.className='erreur'; msg.textContent='Injection impossible : '+(e&&e.message||e); }
 };
 
-/* ---------------- ouverture ---------------- */
-(async()=>{ await ouvrirFirebase(); })();
+/* ---------------- ouverture ----------------
+   Session retrouvée + empreinte enregistrée  -> écran de verrou (empreinte)
+   Session retrouvée sans empreinte           -> on entre directement
+   Pas de session                             -> mot de passe                               */
+(async()=>{
+  await ouvrirFirebase();
+  if(DEMO || !fbAuth){ ecran('login'); return; }
+  let premier=true;
+  fbAuth.onAuthStateChanged(async u=>{
+    if(!u){ ecran('login'); premier=false; return; }
+    if(!premier) return;                      // la connexion manuelle ouvre déjà l'application
+    premier=false;
+    if(bioActive()) ecran('verrou');
+    else await ouvrirApplication();
+  });
+  setTimeout(()=>{ if($('vueVerrou').hidden && $('vueLogin').hidden && $('vueApp').hidden) ecran('login'); }, 2500);
+})();
 </script>
 </body>
 </html>
