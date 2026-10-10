@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ISTA Hay Riad — Direction</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E3061">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bleu:#2559A8; --bleu-fonce:#0E3061; --bleu-clair:#E8EFFA; --bleu-pale:#F4F7FD;
+  --ink:#141B2D; --soft:#5B6B88; --faible:#8795AC; --line:#DFE4EC;
+  --vert:#1E7A4C; --vert-clair:#E6F5EC; --rouge:#B3302E; --rouge-clair:#FCE9E7;
+  --ambre:#9A6400; --ambre-clair:#FCF1DC; --paper:#F3F5F9; --blanc:#fff;
+  --ombre:0 1px 2px rgba(20,27,45,.05), 0 6px 20px rgba(20,27,45,.06);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+button,select,input{font:inherit}
+button{cursor:pointer;border:0;background:none;color:inherit}
+.wrap{max-width:520px;margin:0 auto;padding:0 14px 90px}
+
+/* ---------- connexion ---------- */
+.login{max-width:380px;margin:12vh auto;padding:26px 22px;background:var(--blanc);
+  border-radius:18px;box-shadow:var(--ombre)}
+.marque{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--bleu);text-transform:uppercase}
+.login h1{font-size:20px;margin:8px 0 18px;font-weight:700}
+label{display:block;font-size:12px;color:var(--soft);margin:12px 0 5px;font-weight:600}
+input[type=email],input[type=password],input[type=file]{width:100%;padding:11px 12px;border:1px solid var(--line);
+  border-radius:11px;background:var(--blanc);color:var(--ink)}
+input:focus{outline:2px solid var(--bleu-clair);border-color:var(--bleu)}
+.action{width:100%;margin-top:16px;padding:13px;border-radius:11px;background:var(--bleu);
+  color:#fff;font-weight:700;box-shadow:0 2px 10px rgba(37,89,168,.3)}
+.action:disabled{opacity:.5;box-shadow:none}
+.lienmini{font-size:12.5px;color:var(--bleu);text-decoration:underline;padding:6px 0}
+.erreur{color:var(--rouge);font-size:13.5px;margin:10px 0 0}
+.ok{color:var(--vert);font-size:13.5px;margin:10px 0 0}
+
+/* ---------- en-tête ---------- */
+header{position:sticky;top:0;z-index:30;background:var(--bleu-fonce);color:#fff;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 0}
+.hdTop{max-width:520px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hdTitre{font-size:16.5px;font-weight:700;letter-spacing:.01em}
+.hdTitre small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;opacity:.65;margin-bottom:1px}
+.hdBtn{width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.14);color:#fff;
+  font-size:17px;display:grid;place-items:center}
+.hdBtn:active{background:rgba(255,255,255,.26)}
+/* onglets */
+.tabs{max-width:520px;margin:10px auto 0;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding-bottom:0}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:9px 14px 11px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.62);
+  border-bottom:3px solid transparent;white-space:nowrap}
+.tab.on{color:#fff;border-bottom-color:#fff}
+
+/* ---------- panneau outils ---------- */
+.outils{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);padding:16px;margin:14px 0}
+.outils h3{margin:0 0 4px;font-size:14.5px}
+.outils p{margin:0 0 10px;font-size:12.5px;color:var(--soft)}
+
+/* ---------- barres de sélection ---------- */
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:12px 0 4px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;padding:7px 13px;border-radius:999px;background:var(--blanc);border:1px solid var(--line);
+  font-size:13px;font-weight:600;color:var(--soft);white-space:nowrap}
+.chip.on{background:var(--bleu);border-color:var(--bleu);color:#fff}
+.chip.auj{box-shadow:inset 0 0 0 2px var(--bleu-clair)}
+.selBar{display:flex;align-items:center;gap:8px;margin:8px 0 14px}
+.selBar select{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;
+  background:var(--blanc);font-weight:600}
+.fleche{width:40px;height:42px;border-radius:12px;background:var(--blanc);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--bleu);font-size:15px;flex:none}
+.fleche:disabled{opacity:.35}
+
+/* ---------- grille d'emploi ---------- */
+.card{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);overflow:hidden;margin-bottom:12px}
+.cardTete{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;
+  align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cardTete b{font-size:15.5px}
+.cardTete span{font-size:12.5px;color:var(--soft)}
+.jour{border-bottom:1px solid var(--line)}
+.jour:last-child{border-bottom:0}
+.jourTete{padding:8px 15px;background:var(--bleu-pale);font-size:11.5px;font-weight:800;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--bleu-fonce)}
+.cases{display:grid;grid-template-columns:1fr;gap:1px;background:var(--line)}
+.case{background:var(--blanc);padding:10px 15px;min-height:46px;display:flex;gap:10px;align-items:flex-start}
+.caseH{flex:0 0 76px;font-size:11px;font-weight:700;color:var(--faible);padding-top:2px;
+  font-variant-numeric:tabular-nums}
+.caseC{flex:1;min-width:0}
+.caseC b{display:block;font-size:14px;font-weight:700}
+.caseC small{display:block;font-size:12px;color:var(--soft);margin-top:1px}
+.pastille{display:inline-block;margin-top:3px;padding:2px 8px;border-radius:7px;font-size:11px;
+  font-weight:700;background:var(--bleu-clair);color:var(--bleu-fonce)}
+.pastille.fad{background:var(--ambre-clair);color:var(--ambre)}
+.vide{color:var(--faible);font-size:12.5px;font-style:italic;padding-top:2px}
+.rienJour{display:none;background:var(--blanc);padding:10px 15px;color:var(--faible);
+  font-size:12.5px;font-style:italic}
+/* PAGE CONÇUE POUR LE TÉLÉPHONE UNIQUEMENT (10/10/2026, demande) : une seule colonne, on n'affiche que les
+   séances réelles — une grille aux trois quarts vide se ferait défiler pour rien. Sur un grand écran, la
+   même colonne reste centrée, comme dans l'application. */
+.case.libre{display:none}
+.jour.sansCours .rienJour{display:block}
+
+/* ---------- absences ---------- */
+.slotCard{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);padding:13px 15px;margin-bottom:10px}
+.slotTete{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.slotTete b{font-size:13.5px;font-variant-numeric:tabular-nums}
+.compteurs{display:flex;gap:5px;flex-wrap:wrap}
+.cpt{padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.cpt.abs{background:var(--rouge-clair);color:var(--rouge)}
+.cpt.pre{background:var(--vert-clair);color:var(--vert)}
+.cpt.att{background:#EEF1F6;color:var(--soft)}
+.absLigne{background:var(--rouge-clair);border-left:4px solid var(--rouge);border-radius:9px;
+  padding:8px 11px;margin-bottom:6px}
+.absLigne b{font-size:14px;color:var(--rouge)}
+.absLigne small{display:block;font-size:12px;color:var(--soft);margin-top:1px}
+.aucun{color:var(--vert);font-size:13px;font-weight:600}
+details{margin-top:7px}
+summary{cursor:pointer;font-size:12.5px;color:var(--bleu);font-weight:600}
+details ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--soft)}
+
+/* ---------- tableaux de synthèse ---------- */
+.tab2{width:100%;border-collapse:collapse;background:var(--blanc);border-radius:14px;overflow:hidden;
+  box-shadow:var(--ombre);font-size:12.5px}
+.tab2 th,.tab2 td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line)}
+.tab2 th{background:var(--bleu-pale);font-size:10.5px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--bleu-fonce)}
+.tab2 td:first-child,.tab2 th:first-child{text-align:left;padding-left:12px;font-weight:700}
+.tab2 tr:last-child td{border-bottom:0}
+.val{display:inline-grid;place-items:center;min-width:28px;height:26px;border-radius:8px;font-weight:800}
+.val.zero{color:var(--faible)}
+.val.rouge{background:var(--rouge-clair);color:var(--rouge);cursor:pointer}
+.val.vert{background:var(--vert-clair);color:var(--vert)}
+.val.ambre{background:var(--ambre-clair);color:var(--ambre)}
+.val.grise{background:#EEF1F6;color:var(--soft)}
+
+/* ---------- salles ---------- */
+.salles{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.salle{padding:3px 9px;border-radius:8px;background:var(--vert-clair);color:var(--vert);
+  font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.salle.prise{background:#EEF1F6;color:var(--soft)}
+
+.titre{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faible);margin:16px 0 8px}
+.note{font-size:12px;color:var(--faible);margin:8px 2px 0}
+.message{background:var(--blanc);border-radius:16px;box-shadow:var(--ombre);padding:26px 18px;
+  text-align:center;color:var(--soft);font-size:14px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<!-- ===================== CONNEXION ===================== -->
+<section id="vueLogin">
+  <div class="login">
+    <div class="marque">ISTA Hay Riad</div>
+    <h1>Espace direction</h1>
+    <label for="email">Adresse e-mail</label>
+    <input id="email" type="email" autocomplete="username" value="achraf.elgharabi@ofppt.ma">
+    <label for="mdp">Mot de passe</label>
+    <input id="mdp" type="password" autocomplete="current-password">
+    <button class="lienmini" id="voirMdp" type="button">Afficher le mot de passe</button>
+    <p class="erreur" id="logErr" hidden></p>
+    <button class="action" id="btnLog">Connexion</button>
+  </div>
+</section>
+
+<!-- ===================== APPLICATION ===================== -->
+<section id="vueApp" hidden>
+  <header>
+    <div class="hdTop">
+      <div class="hdTitre"><small>ISTA Hay Riad</small>Direction</div>
+      <button class="hdBtn" id="btnOutils" title="Outils">⋯</button>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab on" data-t="form">Emploi formateurs</button>
+      <button class="tab" data-t="grp">Emploi stagiaires</button>
+      <button class="tab" data-t="abs">Suivi d'absence</button>
+      <button class="tab" data-t="salles">Salles disponibles</button>
+    </nav>
+  </header>
+
+  <div class="wrap">
+    <div class="outils" id="panOutils" hidden>
+      <h3>Emplois du temps</h3>
+      <p id="etatPlan">—</p>
+      <input id="fichier" type="file" accept=".json,application/json">
+      <button class="action" id="btnInjecter" style="margin-top:10px">Injecter les emplois</button>
+      <p id="msgInj" style="font-size:13px;margin:8px 0 0"></p>
+      <button class="lienmini" id="btnSortir" style="margin-top:14px">Se déconnecter</button>
+    </div>
+
+    <div id="semaines" class="chips"></div>
+    <div id="contenu"></div>
+  </div>
+</section>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
+<script>
+/* ===================================================================
+   ISTA HAY RIAD — ESPACE DIRECTION (10/10/2026)
+   Page RÉSERVÉE AU DIRECTEUR, destinée à être empaquetée en .apk (l'agent de sécurité, lui, reste sur le
+   site web « Suivi d'absence »). Quatre volets, une seule barre de semaines :
+     1. Emploi formateurs   2. Emploi stagiaires   3. Suivi d'absence (en direct)   4. Salles disponibles
+   Lit les mêmes données que Suivi d'absence, même projet Firebase :
+     suivi/plan      = en-tête du planning injecté {lundis, dates, F, nomAff, G, M, S, salles?, nb}
+     suivi/plan_<w>  = {sessions:[[formateur, jour, créneau, type(0=présentiel,1=distanciel),
+                                   salle, module, [groupes]], …]}
+     suivi/p<w>      = pointage de l'agent : « f<formateur>_<jour>_<créneau> » = {e:'O'|'N', h:'HH:MM'}
+   Mode démonstration (?demo=1) : tout reste dans le navigateur (mot de passe « demo »).
+   =================================================================== */
+const $=id=>document.getElementById(id);
+const DEMO=new URLSearchParams(location.search).get('demo')==='1';
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyCgVQtJdrsIsS2bvpkqZSMH7pPJGm_IlO8", authDomain:"emploi-ista-hay-riad.firebaseapp.com",
+  projectId:"emploi-ista-hay-riad", storageBucket:"emploi-ista-hay-riad.firebasestorage.app",
+  messagingSenderId:"683780273492", appId:"1:683780273492:web:f00ef52a85898b39d504c1"
+};
+const CRENEAUX=['08h00 – 10h30','10h30 – 13h00','13h30 – 16h00','16h00 – 18h30'];
+const CR_COURT=['08h00','10h30','13h30','16h00'];
+const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const JR_COURT=['Lun','Mar','Mer','Jeu','Ven','Sam'];
+const DUREE=2.5;                                   // heures d'un créneau
+
+/* ---------------- accès aux données ---------------- */
+let fs=null, fbAuth=null;
+const ecoutes={};
+const memLire=p=>{ try{ return JSON.parse(localStorage.getItem('SA_DEMO|'+p)||'null'); }catch(e){ return null; } };
+const DB={
+  async lire(p){
+    if(DEMO) return memLire(p);
+    const s=await fs.doc(p).get(); if(!s.exists) return null;
+    const o=s.data()||{}; if(typeof o.j==='string'){ try{ return JSON.parse(o.j); }catch(e){ return null; } } return o;
+  },
+  async ecrire(p,obj){
+    if(DEMO){ localStorage.setItem('SA_DEMO|'+p, JSON.stringify(obj)); (ecoutes[p]||[]).forEach(f=>f(obj)); return; }
+    await fs.doc(p).set({j:JSON.stringify(obj), maj:new Date().toISOString()});
+  },
+  ecouter(p,cb){
+    if(DEMO){ (ecoutes[p]=ecoutes[p]||[]).push(cb); cb(memLire(p)||{}); return ()=>{ ecoutes[p]=(ecoutes[p]||[]).filter(f=>f!==cb); }; }
+    return fs.doc(p).onSnapshot(s=>cb(s.exists?(s.data()||{}):{}), e=>console.error('écoute',e));
+  }
+};
+async function ouvrirFirebase(){
+  if(DEMO) return;
+  try{
+    if(!window.firebase) throw new Error('SDK Firebase non chargé');
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    /* App Check : toute page reliée à ce projet doit l'activer, sinon Firestore refuse (règle du 21/09/2026) */
+    try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider('6LfMzsctAAAAAMTwTwCqmIC_tlABhvTR1keKY-1I'), true); }catch(e){ console.error('App Check',e); }
+    fs=firebase.firestore(); fbAuth=firebase.auth();
+    try{ await fbAuth.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+  }catch(e){ console.error('Firebase',e); fs=null; }
+}
+
+/* ---------------- état ---------------- */
+let META=null;
+const CACHE={};                                    // semaine -> séances
+const ET={ tab:'form', w:0, jour:0, f:0, g:0, stop:null, pointage:{} };
+
+const dateCasa=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Casablanca'});
+const salleAff=c=>{ const m=/^S0*(\d+)$/i.exec(String(c||'')); return m?m[1]:(c||''); };
+const salleNum=c=>{ const m=/(\d+)/.exec(String(c||'')); return m?+m[1]:999; };
+const jjmm=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+const h1=v=>(Math.round(v*10)/10).toString().replace('.',',');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function chargerSemaine(w){
+  if(CACHE[w]) return CACHE[w];
+  const d=await DB.lire('suivi/plan_'+w);
+  return (CACHE[w]=(d&&d.sessions)||[]);
+}
+/* séance brute -> objet lisible (présentiel ET distanciel, contrairement à l'écran de l'agent) */
+function lire(sessions){
+  if(!META) return [];
+  return sessions.map(x=>({
+    fi:x[0], jour:x[1], slot:x[2], fad:x[3]===1,
+    salle:(META.S&&META.S[x[4]])||'', module:(META.M&&META.M[x[5]])||'',
+    gi:(x[6]||[]), groupes:(x[6]||[]).map(i=>META.G[i]&&META.G[i][0]).filter(Boolean),
+    formateur:(META.nomAff&&META.nomAff[x[0]])||(META.F&&META.F[x[0]])||'?'
+  }));
+}
+/* toutes les salles connues : la liste de l'établissement si elle a été exportée, sinon celles vues au planning */
+function toutesSalles(){
+  const l=(META&&Array.isArray(META.salles)&&META.salles.length) ? META.salles
+        : ((META&&META.S)||[]).filter(Boolean);
+  return [...new Set(l)].filter(s=>s && s!=='FAD').sort((a,b)=>salleNum(a)-salleNum(b)||String(a).localeCompare(b));
+}
+/* semaine et jour d'aujourd'hui, d'après les lundis du planning */
+function aujourdhui(){
+  if(!META||!META.lundis||!META.lundis.length) return null;
+  const auj=new Date(dateCasa()+'T00:00:00');
+  for(let w=META.lundis.length-1; w>=0; w--){
+    const d=Math.round((auj-new Date(META.lundis[w]+'T00:00:00'))/86400000);
+    if(d>=0 && d<=5) return {w, jour:d};
+  }
+  return null;
+}
+const dateJour=(w,j)=>{ const d=new Date(META.lundis[w]+'T00:00:00'); d.setDate(d.getDate()+j); return d; };
+
+/* ===================================================================
+   CONNEXION
+   =================================================================== */
+$('voirMdp').onclick=()=>{ const i=$('mdp');
+  const v=i.type==='password'; i.type=v?'text':'password';
+  $('voirMdp').textContent=v?'Masquer le mot de passe':'Afficher le mot de passe'; };
+$('mdp').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnLog').click(); });
+$('btnLog').onclick=async()=>{
+  const b=$('btnLog'), err=$('logErr');
+  err.hidden=true; b.disabled=true; b.textContent='Connexion…';
+  try{
+    if(DEMO){ if($('mdp').value!=='demo') throw new Error('mot de passe de démonstration : demo'); }
+    else await fbAuth.signInWithEmailAndPassword($('email').value.trim(), $('mdp').value);
+    $('mdp').value='';
+    $('vueLogin').hidden=true; $('vueApp').hidden=false;
+    await demarrer();
+  }catch(e){
+    err.hidden=false;
+    err.textContent = /password|credential|invalid/i.test(e&&e.code||'')
+      ? 'E-mail ou mot de passe incorrect.' : ('Connexion impossible : '+(e&&e.message||e));
+  }finally{ b.disabled=false; b.textContent='Connexion'; }
+};
+$('btnSortir').onclick=async()=>{
+  try{ if(!DEMO && fbAuth) await fbAuth.signOut(); }catch(e){}
+  if(ET.stop){ ET.stop(); ET.stop=null; }
+  $('vueApp').hidden=true; $('vueLogin').hidden=false; $('panOutils').hidden=true;
+};
+$('btnOutils').onclick=()=>{ $('panOutils').hidden=!$('panOutils').hidden; };
+
+/* ===================================================================
+   DÉMARRAGE
+   =================================================================== */
+async function demarrer(){
+  META=await DB.lire('suivi/plan');
+  majEtatPlan();
+  if(!META||!META.lundis||!META.lundis.length){
+    $('semaines').innerHTML='';
+    $('contenu').innerHTML='<div class="message">Aucun emploi du temps n’a encore été injecté.<br>'
+      +'Ouvrez le menu <b>⋯</b> en haut à droite pour déposer le fichier JSON des emplois.</div>';
+    return;
+  }
+  const a=aujourdhui();
+  ET.w = a ? a.w : META.lundis.length-1;
+  ET.jour = a ? a.jour : 0;
+  navSemaines(); rendre();
+}
+function majEtatPlan(){
+  const e=$('etatPlan');
+  if(!META||!META.nb){ e.textContent='Aucun emploi injecté pour l’instant.'; return; }
+  const d=META.injecte ? new Date(META.injecte) : null;
+  e.textContent=META.nb+' semaine'+(META.nb>1?'s':'')+' · '+(META.F?META.F.length:0)+' formateurs · '
+    +(META.G?META.G.length:0)+' groupes'+(d?' · injecté le '+jjmm(d)+' à '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'):'');
+}
+function navSemaines(){
+  const a=aujourdhui();
+  $('semaines').innerHTML=META.lundis.map((l,w)=>{
+    const d=new Date(l+'T00:00:00');
+    return `<button class="chip${w===ET.w?' on':''}${a&&a.w===w?' auj':''}" data-w="${w}">S${w+1} · ${jjmm(d)}</button>`;
+  }).join('');
+  $('semaines').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    ET.w=+b.dataset.w; navSemaines(); rendre();
+    const on=$('semaines').querySelector('.chip.on'); if(on) on.scrollIntoView({block:'nearest',inline:'center'});
+  });
+}
+$('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  ET.tab=b.dataset.t;
+  $('tabs').querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  $('panOutils').hidden=true;
+  window.scrollTo(0,0); rendre();
+});
+
+async function rendre(){
+  if(ET.stop){ ET.stop(); ET.stop=null; }                 // une seule écoute à la fois
+  const c=$('contenu');
+  c.innerHTML='<div class="message">Chargement…</div>';
+  const sessions=lire(await chargerSemaine(ET.w));
+  if(ET.tab==='form')   return vueFormateurs(sessions);
+  if(ET.tab==='grp')    return vueGroupes(sessions);
+  if(ET.tab==='abs')    return vueAbsences(sessions);
+  if(ET.tab==='salles') return vueSalles(sessions);
+}
+
+/* ---------- grille commune (emploi d'une semaine) ---------- */
+function grilleHtml(sessions, cellule){
+  let h='';
+  for(let j=0;j<6;j++){
+    const duJour=sessions.filter(x=>x.jour===j);
+    h+=`<div class="jour${duJour.length?'':' sansCours'}"><div class="jourTete">${JOURS[j]} ${jjmm(dateJour(ET.w,j))}</div>`
+      +`<div class="rienJour">Aucune séance ce jour-là.</div><div class="cases">`;
+    for(let s=0;s<4;s++){
+      const ici=duJour.filter(x=>x.slot===s);
+      h+=`<div class="case${ici.length?'':' libre'}"><div class="caseH">${CR_COURT[s]}</div><div class="caseC">`
+        + (ici.length ? ici.map(cellule).join('<div style="height:7px"></div>') : '<div class="vide">—</div>')
+        + `</div></div>`;
+    }
+    h+='</div></div>';
+  }
+  return h;
+}
+
+/* ===================================================================
+   1. EMPLOI FORMATEURS
+   =================================================================== */
+function vueFormateurs(sessions){
+  const noms=(META.nomAff||META.F||[]);
+  const ordre=noms.map((n,i)=>({i,n})).sort((a,b)=>String(a.n).localeCompare(String(b.n),'fr'));
+  if(!ordre.length){ $('contenu').innerHTML='<div class="message">Aucun formateur dans ce planning.</div>'; return; }
+  if(!ordre.some(o=>o.i===ET.f)) ET.f=ordre[0].i;
+  const pos=ordre.findIndex(o=>o.i===ET.f);
+  const mien=sessions.filter(x=>x.fi===ET.f);
+  const nbP=mien.filter(x=>!x.fad).length, nbF=mien.length-nbP;
+
+  $('contenu').innerHTML=`
+    <div class="selBar">
+      <button class="fleche" id="prec" ${pos<=0?'disabled':''}>◀</button>
+      <select id="sel">${ordre.map(o=>`<option value="${o.i}"${o.i===ET.f?' selected':''}>${esc(o.n)}</option>`).join('')}</select>
+      <button class="fleche" id="suiv" ${pos>=ordre.length-1?'disabled':''}>▶</button>
+    </div>
+    <div class="card">
+      <div class="cardTete"><b>${esc(noms[ET.f]||'')}</b>
+        <span>${mien.length} séance${mien.length>1?'s':''} · ${h1(mien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
+      ${grilleHtml(mien, x=>`<b>${esc(x.groupes.join(', ')||'—')}</b>`
+        +`<small>${esc(x.module||'')}</small>`
+        +`<span class="pastille${x.fad?' fad':''}">${x.fad?'À distance':'Salle '+esc(salleAff(x.salle)||'?')}</span>`)}
+    </div>`;
+  $('sel').onchange=e=>{ ET.f=+e.target.value; rendre(); };
+  $('prec').onclick=()=>{ ET.f=ordre[Math.max(0,pos-1)].i; rendre(); };
+  $('suiv').onclick=()=>{ ET.f=ordre[Math.min(ordre.length-1,pos+1)].i; rendre(); };
+}
+
+/* ===================================================================
+   2. EMPLOI STAGIAIRES (par groupe)
+   =================================================================== */
+function vueGroupes(sessions){
+  const G=META.G||[];
+  /* 3ᵉ années d'abord, puis 2ᵉ, puis 1ʳᵉ ; alphabétique à l'intérieur */
+  const ordre=G.map((g,i)=>({i, code:(g&&g[0])||'', an:+((g&&g[2])||0)}))
+    .filter(o=>o.code).sort((a,b)=>b.an-a.an || a.code.localeCompare(b.code,'fr'));
+  if(!ordre.length){ $('contenu').innerHTML='<div class="message">Aucun groupe dans ce planning.</div>'; return; }
+  if(!ordre.some(o=>o.i===ET.g)) ET.g=ordre[0].i;
+  const pos=ordre.findIndex(o=>o.i===ET.g);
+  const sien=sessions.filter(x=>x.gi.includes(ET.g));
+  const nbF=sien.filter(x=>x.fad).length;
+
+  $('contenu').innerHTML=`
+    <div class="selBar">
+      <button class="fleche" id="prec" ${pos<=0?'disabled':''}>◀</button>
+      <select id="sel">${ordre.map(o=>`<option value="${o.i}"${o.i===ET.g?' selected':''}>${esc(o.code)}${o.an?' · '+o.an+'ᵉ année':''}</option>`).join('')}</select>
+      <button class="fleche" id="suiv" ${pos>=ordre.length-1?'disabled':''}>▶</button>
+    </div>
+    <div class="card">
+      <div class="cardTete"><b>${esc((G[ET.g]||[])[0]||'')}</b>
+        <span>${sien.length} séance${sien.length>1?'s':''} · ${h1(sien.length*DUREE)} h${nbF?` · dont ${h1(nbF*DUREE)} h à distance`:''}</span></div>
+      ${grilleHtml(sien, x=>`<b>${esc(x.module||'—')}</b>`
+        +`<small>${esc(x.formateur)}</small>`
+        +`<span class="pastille${x.fad?' fad':''}">${x.fad?'À distance':'Salle '+esc(salleAff(x.salle)||'?')}</span>`)}
+    </div>`;
+  $('sel').onchange=e=>{ ET.g=+e.target.value; rendre(); };
+  $('prec').onclick=()=>{ ET.g=ordre[Math.max(0,pos-1)].i; rendre(); };
+  $('suiv').onclick=()=>{ ET.g=ordre[Math.min(ordre.length-1,pos+1)].i; rendre(); };
+}
+
+/* ===================================================================
+   3. SUIVI D'ABSENCE (en direct)
+   =================================================================== */
+const cleP=(fi,j,s)=>'f'+fi+'_'+j+'_'+s;
+function vueAbsences(sessions){
+  /* une ligne par formateur présent physiquement (le distanciel ne se constate pas sur place) */
+  const pres=sessions.filter(x=>!x.fad);
+  const dessiner=()=>{
+    const a=aujourdhui();
+    const chips=`<div class="chips" id="jours">
+      ${JOURS.map((j,i)=>`<button class="chip${ET.jour===i?' on':''}${a&&a.w===ET.w&&a.jour===i?' auj':''}" data-j="${i}">${JR_COURT[i]} ${jjmm(dateJour(ET.w,i))}</button>`).join('')}
+      <button class="chip${ET.jour===-1?' on':''}" data-j="-1">Semaine</button></div>`;
+    $('contenu').innerHTML = chips + (ET.jour===-1 ? syntheseAbs(pres) : jourAbs(pres));
+    $('jours').querySelectorAll('button').forEach(b=>b.onclick=()=>{ ET.jour=+b.dataset.j; dessiner(); });
+    $('contenu').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ ET.jour=+b.dataset.go; dessiner(); });
+  };
+  ET.stop=DB.ecouter('suivi/p'+ET.w, data=>{ ET.pointage=data||{}; dessiner(); });
+}
+function etatDe(x){ const p=ET.pointage[cleP(x.fi,x.jour,x.slot)]; return p&&p.e ? p.e : null; }
+function jourAbs(pres){
+  let h='';
+  for(let s=0;s<4;s++){
+    const ici=pres.filter(x=>x.jour===ET.jour && x.slot===s);
+    const abs=ici.filter(x=>etatDe(x)==='N'), ok=ici.filter(x=>etatDe(x)==='O'), att=ici.filter(x=>!etatDe(x));
+    h+=`<div class="slotCard">
+      <div class="slotTete"><b>${CRENEAUX[s]}</b><div class="compteurs">
+        ${abs.length?`<span class="cpt abs">${abs.length} absent${abs.length>1?'s':''}</span>`:''}
+        ${ok.length?`<span class="cpt pre">${ok.length} présent${ok.length>1?'s':''}</span>`:''}
+        ${att.length?`<span class="cpt att">${att.length} à pointer</span>`:''}
+        ${!ici.length?`<span class="cpt att">aucun cours</span>`:''}
+      </div></div>`;
+    if(abs.length){
+      h+=abs.map(x=>{ const p=ET.pointage[cleP(x.fi,x.jour,x.slot)]||{};
+        return `<div class="absLigne"><b>${esc(x.formateur)}</b>
+          <small>${esc(x.groupes.join(', '))} · salle ${esc(salleAff(x.salle)||'?')}${p.h?' · relevé à '+esc(p.h):''}</small></div>`;
+      }).join('');
+    } else if(ici.length){
+      h+=`<div class="aucun">Aucun formateur absent sur ce créneau.</div>`;
+    }
+    if(ok.length) h+=`<details><summary>Présents (${ok.length})</summary><ul>${ok.map(x=>`<li>${esc(x.formateur)} — ${esc(x.groupes.join(', '))}</li>`).join('')}</ul></details>`;
+    if(att.length) h+=`<details><summary>Pas encore pointés (${att.length})</summary><ul>${att.map(x=>`<li>${esc(x.formateur)} — ${esc(x.groupes.join(', '))} · salle ${esc(salleAff(x.salle)||'?')}</li>`).join('')}</ul></details>`;
+    h+='</div>';
+  }
+  return h;
+}
+function syntheseAbs(pres){
+  let tot=0; const parForm={};
+  let t=`<div class="titre">Formateurs absents — semaine S${ET.w+1}</div>
+    <table class="tab2"><tr><th>Jour</th>${CR_COURT.map(c=>`<th>${c}</th>`).join('')}<th>Total</th></tr>`;
+  for(let j=0;j<6;j++){
+    let nj=0; let cells='';
+    for(let s=0;s<4;s++){
+      const abs=pres.filter(x=>x.jour===j && x.slot===s && etatDe(x)==='N');
+      abs.forEach(x=>{ parForm[x.formateur]=(parForm[x.formateur]||0)+DUREE; });
+      nj+=abs.length;
+      cells+=`<td><span class="val ${abs.length?'rouge':'zero'}" ${abs.length?`data-go="${j}"`:''}>${abs.length||'·'}</span></td>`;
+    }
+    tot+=nj;
+    t+=`<tr><td>${JOURS[j]}</td>${cells}<td><span class="val ${nj?'rouge':'zero'}">${nj||'·'}</span></td></tr>`;
+  }
+  t+=`</table><p class="note">Touchez un chiffre rouge pour voir le détail du jour. Total de la semaine : <b>${tot}</b> absence${tot>1?'s':''} relevée${tot>1?'s':''} (${h1(tot*DUREE)} h).</p>`;
+  const noms=Object.keys(parForm).sort((a,b)=>parForm[b]-parForm[a]||a.localeCompare(b,'fr'));
+  if(noms.length){
+    t+=`<div class="titre">Heures d'absence par formateur</div><table class="tab2">
+      <tr><th>Formateur</th><th>Heures</th></tr>
+      ${noms.map(n=>`<tr><td>${esc(n)}</td><td><span class="val rouge">${h1(parForm[n])} h</span></td></tr>`).join('')}</table>`;
+  }
+  return t;
+}
+
+/* ===================================================================
+   4. SALLES DISPONIBLES
+   =================================================================== */
+function vueSalles(sessions){
+  const pres=sessions.filter(x=>!x.fad && x.salle);
+  const salles=toutesSalles();
+  const prises=(j,s)=>new Set(pres.filter(x=>x.jour===j && x.slot===s).map(x=>x.salle));
+  const dessiner=()=>{
+    const a=aujourdhui();
+    const chips=`<div class="chips" id="jours">
+      ${JOURS.map((j,i)=>`<button class="chip${ET.jour===i?' on':''}${a&&a.w===ET.w&&a.jour===i?' auj':''}" data-j="${i}">${JR_COURT[i]} ${jjmm(dateJour(ET.w,i))}</button>`).join('')}
+      <button class="chip${ET.jour===-1?' on':''}" data-j="-1">Semaine</button></div>`;
+    let h=chips;
+    if(!salles.length){
+      h+='<div class="message">Aucune salle connue dans ce planning.</div>';
+    } else if(ET.jour===-1){
+      h+=`<div class="titre">Salles libres — semaine S${ET.w+1}</div>
+        <table class="tab2"><tr><th>Jour</th>${CR_COURT.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+      for(let j=0;j<6;j++){
+        h+=`<tr><td>${JOURS[j]}</td>`;
+        for(let s=0;s<4;s++){
+          const n=salles.length-prises(j,s).size;
+          const cl = n===0?'rouge' : n<=3?'ambre' : 'vert';
+          h+=`<td><span class="val ${cl}" data-go="${j}">${n}</span></td>`;
+        }
+        h+='</tr>';
+      }
+      h+=`</table><p class="note">Nombre de salles libres sur ${salles.length} connues. Touchez un chiffre pour voir le détail du jour.</p>`;
+    } else {
+      for(let s=0;s<4;s++){
+        const pr=prises(ET.jour,s);
+        const libres=salles.filter(r=>!pr.has(r));
+        h+=`<div class="slotCard">
+          <div class="slotTete"><b>${CRENEAUX[s]}</b><div class="compteurs">
+            <span class="cpt ${libres.length?'pre':'abs'}">${libres.length} libre${libres.length>1?'s':''}</span>
+            <span class="cpt att">${pr.size} occupée${pr.size>1?'s':''}</span></div></div>
+          ${libres.length ? `<div class="salles">${libres.map(r=>`<span class="salle">${esc(salleAff(r))}</span>`).join('')}</div>`
+                          : `<div class="aucun" style="color:var(--rouge)">Aucune salle libre sur ce créneau.</div>`}
+          ${pr.size ? `<details><summary>Salles occupées (${pr.size})</summary><ul>${
+              [...pr].sort((a,b)=>salleNum(a)-salleNum(b)).map(r=>{
+                const q=pres.find(x=>x.jour===ET.jour && x.slot===s && x.salle===r);
+                return `<li>Salle ${esc(salleAff(r))} — ${esc(q?q.formateur:'')}${q&&q.groupes.length?' · '+esc(q.groupes.join(', ')):''}</li>`;
+              }).join('')}</ul></details>` : ''}
+        </div>`;
+      }
+    }
+    $('contenu').innerHTML=h;
+    $('jours').querySelectorAll('button').forEach(b=>b.onclick=()=>{ ET.jour=+b.dataset.j; dessiner(); });
+    $('contenu').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ ET.jour=+b.dataset.go; dessiner(); });
+  };
+  dessiner();
+}
+
+/* ===================================================================
+   INJECTION DES EMPLOIS (menu ⋯)
+   =================================================================== */
+$('btnInjecter').onclick=async()=>{
+  const f=$('fichier').files&&$('fichier').files[0], msg=$('msgInj');
+  if(!f){ msg.className='erreur'; msg.textContent='Choisissez d’abord le fichier JSON des emplois.'; return; }
+  try{
+    const o=JSON.parse(await f.text());
+    if(!o.semaines||!o.F||!o.G||!o.lundis) throw new Error('ce fichier n’est pas un export d’emplois');
+    const n=o.semaines.length; if(!n) throw new Error('aucune semaine dans ce fichier');
+    msg.className='ok'; msg.textContent='Injection en cours…';
+    for(let w=0; w<n; w++){
+      await DB.ecrire('suivi/plan_'+w, {sessions:o.semaines[w]});
+      msg.textContent='Injection en cours… semaine '+(w+1)+' / '+n;
+    }
+    await DB.ecrire('suivi/plan', {lundis:o.lundis, dates:o.dates||[], F:o.F, nomAff:o.nomAff||o.F,
+      G:o.G, M:o.M||[], S:o.S||[], salles:o.salles||[], nb:n, injecte:new Date().toISOString()});
+    Object.keys(CACHE).forEach(k=>delete CACHE[k]);
+    msg.className='ok'; msg.textContent='✓ '+n+' semaine'+(n>1?'s':'')+' injectée'+(n>1?'s':'')+'.';
+    await demarrer();
+  }catch(e){ msg.className='erreur'; msg.textContent='Injection impossible : '+(e&&e.message||e); }
+};
+
+/* ---------------- ouverture ---------------- */
+(async()=>{ await ouvrirFirebase(); })();
+</script>
+</body>
+</html>
